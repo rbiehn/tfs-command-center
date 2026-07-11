@@ -3,7 +3,11 @@
 ============================================================
   EXOUSIA | TFS - Master Tracker (Command Center module)
   rbiehn.github.io/tfs-command-center/master-tracker.html
-  Version 1.0 | July 07, 2026
+  Version 2 | July 10, 2026
+============================================================
+  v2 security: NO direct table access. Reads/writes go through the
+  password-gated `tracker` edge function (service role, server-side).
+  Enter the password once; it is shared with the BookFunnel page.
 ============================================================
 -->
 <html lang="en"><head>
@@ -11,7 +15,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TFS - Master Tracker</title>
 <style>
-:root{--bg:#0f1117;--card:#1a1d27;--card2:#222634;--line:#2c3142;--txt:#e8eaf0;--dim:#9aa0b4;--accent:#c9a94a;--blue:#4a90d9;}
+:root{--bg:#0f1117;--card:#1a1d27;--card2:#222634;--line:#2c3142;--txt:#e8eaf0;--dim:#9aa0b4;--accent:#c9a94a;--blue:#4a90d9;--red:#d9694a;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.4}
 .wrap{max-width:640px;margin:0 auto;padding:0 12px 80px}
@@ -34,8 +38,22 @@ select.st{width:100%;margin-top:8px;padding:8px;border-radius:9px;border:1px sol
 .load{text-align:center;color:var(--dim);padding:40px}
 .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#3fb27f;color:#08130d;padding:9px 16px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:.2s;z-index:50}
 .toast.on{opacity:1}
+#gate{display:none;position:fixed;inset:0;background:var(--bg);z-index:100;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center}
+#gate .g-t{font-size:15px;font-weight:700}#gate .g-t span{color:var(--blue)}
+#gate .g-s{color:var(--dim);font-size:13px;margin:6px 0 18px}
+#gate input{width:100%;max-width:300px;padding:12px 13px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:16px;text-align:center}
+#gate button{margin-top:12px;width:100%;max-width:300px;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#141414;font-weight:700;font-size:14px;cursor:pointer}
+#gateMsg{color:var(--red);font-size:12.5px;margin-top:12px;min-height:16px}
 </style></head>
-<body><div class="wrap">
+<body>
+<div id="gate">
+  <div class="g-t"><span>TFS</span> Command Center</div>
+  <div class="g-s">Enter password to unlock the tracker</div>
+  <input id="gateInput" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')unlock()">
+  <button onclick="unlock()">Unlock</button>
+  <div id="gateMsg"></div>
+</div>
+<div class="wrap">
 <header>
 <a class="back" href="./">&larr; Command Center</a>
 <h1><span>Master</span> Tracker</h1>
@@ -46,45 +64,77 @@ select.st{width:100%;margin-top:8px;padding:8px;border-radius:9px;border:1px sol
 <div id="list"><div class="load">Loading...</div></div>
 </div>
 <div class="toast" id="toast">Saved</div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-var sb=supabase.createClient("https://gewufsselhrzbzrctruo.supabase.co","sb_publishable_Vo58uM-Z-4cKOrAw6pno0g_pMrMuqp6");
+var FN="https://gewufsselhrzbzrctruo.supabase.co/functions/v1/tracker";
+// Publishable key sent ONLY to satisfy the Supabase API gateway. It grants
+// nothing: anon has no access to the tracker tables; the function does the work
+// with the service role after checking the password.
+var AK="sb_publishable_Vo58uM-Z-4cKOrAw6pno0g_pMrMuqp6";
+var PASSKEY="tfs_tracker_pass";
 var OUT=[],q="",tab="All";
 var opts=["Not started","Not contacted","Contacted","Replied","Confirmed","Declined","Submitted","Live/Done"];
 function esc(s){s=s==null?"":""+s;return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function toast(m){var t=document.getElementById("toast");t.textContent=m||"Saved";t.classList.add("on");setTimeout(function(){t.classList.remove("on")},1400)}
-async function load(){var a=await sb.from("tracker_outreach").select("*").order("id");if(a.error){document.getElementById("list").innerHTML="<div class=load>"+esc(a.error.message)+"</div>";return}OUT=a.data||[];render()}
+function getPass(){try{return localStorage.getItem(PASSKEY)||""}catch(e){return""}}
+function setPassVal(p){try{localStorage.setItem(PASSKEY,p)}catch(e){}}
+function clearPass(){try{localStorage.removeItem(PASSKEY)}catch(e){}}
+function showGate(msg){var g=document.getElementById("gate");g.style.display="flex";document.getElementById("gateMsg").textContent=msg||"";var i=document.getElementById("gateInput");i.value="";setTimeout(function(){i.focus()},50)}
+function hideGate(){document.getElementById("gate").style.display="none"}
+function unlock(){var v=(document.getElementById("gateInput").value||"").trim();if(!v)return;setPassVal(v);document.getElementById("gateMsg").textContent="Checking...";load()}
+async function api(action,extra){
+  var body=Object.assign({pass:getPass()},extra||{});
+  var r=await fetch(FN+"?action="+action,{method:"POST",headers:{"content-type":"application/json","apikey":AK,"authorization":"Bearer "+AK},body:JSON.stringify(body)});
+  if(r.status===401){var e=new Error("unauthorized");e.unauth=true;throw e}
+  return r.json();
+}
+async function load(){
+  if(!getPass()){showGate();return}
+  try{
+    var d=await api("list");
+    if(d&&d.error){document.getElementById("list").innerHTML="<div class=load>"+esc(d.error)+"</div>";return}
+    OUT=(d&&d.out)||[];hideGate();render();
+  }catch(e){
+    if(e&&e.unauth){clearPass();showGate("Wrong password. Try again.");return}
+    document.getElementById("list").innerHTML="<div class=load>"+esc((e&&e.message)||"Error")+"</div>";
+  }
+}
 function channels(){var m={};OUT.forEach(function(r){m[r.channel]=(m[r.channel]||0)+1});return m}
 function render(){
-  var ch=channels(),keys=Object.keys(ch).sort(),h="";
-  h+="<div class='chip"+(tab=="All"?" on":"")+"' onclick=\"setT('All')\">All "+OUT.length+"</div>";
-  keys.forEach(function(k){h+="<div class='chip"+(tab==k?" on":"")+"' onclick=\"setT(this.dataset.k)\" data-k=\""+esc(k)+"\">"+esc(k)+" "+ch[k]+"</div>"});
-  document.getElementById("tabs").innerHTML=h;
-  list();
+var ch=channels(),keys=Object.keys(ch).sort(),h="";
+h+="<div class='chip"+(tab=="All"?" on":"")+"' onclick=\"setT('All')\">All "+OUT.length+"</div>";
+keys.forEach(function(k){h+="<div class='chip"+(tab==k?" on":"")+"' onclick=\"setT(this.dataset.k)\" data-k=\""+esc(k)+"\">"+esc(k)+" "+ch[k]+"</div>"});
+document.getElementById("tabs").innerHTML=h;
+list();
 }
 document.getElementById("q").addEventListener("input",function(e){q=e.target.value;list()});
 function setT(k){tab=k;render()}
 function match(r){if(!q)return true;return JSON.stringify(r).toLowerCase().indexOf(q.toLowerCase())>=0}
 function list(){
-  var rows=OUT.filter(function(r){return tab=="All"||r.channel==tab}).filter(match);
-  document.getElementById("count").textContent=rows.length+" targets";
-  var html="";
-  rows.forEach(function(r){
-    var done=/done|confirmed|submitted|live/i.test(r.status||"");
-    html+="<div class='card"+(done?" done":"")+"'><div class=row1><div><div class=nm>"+esc(r.name)+"</div><div class=meta>"+esc(r.channel||"")+(r.reach?" &middot; "+esc(r.reach):"")+(r.priority?" &middot; P"+esc(r.priority):"")+"</div></div></div>";
-    if(r.focus)html+="<div class=meta>"+esc(r.focus)+"</div>";
-    if(r.contact&&r.contact!="DM in bio")html+="<div class=meta>"+esc(r.contact)+"</div>";
-    if(r.notes)html+="<div class=meta>"+esc(r.notes)+"</div>";
-    html+="<div class=acts>";
-    if(r.url&&r.url.indexOf("http")==0)html+="<a class='btn go' target=_blank href='"+esc(r.url)+"'>Open</a>";
-    if(r.handle&&r.handle.indexOf("@")==0)html+="<button class=btn onclick=\"ct('"+esc(r.handle)+"')\">Copy "+esc(r.handle)+"</button>";
-    html+="</div>";
-    var o=opts.slice();if(r.status&&o.indexOf(r.status)<0)o.unshift(r.status);
-    html+="<select class=st onchange=\"sv("+r.id+",this.value)\">"+o.map(function(x){return "<option"+(x==r.status?" selected":"")+">"+esc(x)+"</option>"}).join("")+"</select></div>";
-  });
-  document.getElementById("list").innerHTML=html||"<div class=load>Nothing here.</div>";
+var rows=OUT.filter(function(r){return tab=="All"||r.channel==tab}).filter(match);
+document.getElementById("count").textContent=rows.length+" targets";
+var html="";
+rows.forEach(function(r){
+var done=/done|confirmed|submitted|live/i.test(r.status||"");
+html+="<div class='card"+(done?" done":"")+"'><div class=row1><div><div class=nm>"+esc(r.name)+"</div><div class=meta>"+esc(r.channel||"")+(r.reach?" &middot; "+esc(r.reach):"")+(r.priority?" &middot; P"+esc(r.priority):"")+"</div></div></div>";
+if(r.focus)html+="<div class=meta>"+esc(r.focus)+"</div>";
+if(r.contact&&r.contact!="DM in bio")html+="<div class=meta>"+esc(r.contact)+"</div>";
+if(r.notes)html+="<div class=meta>"+esc(r.notes)+"</div>";
+html+="<div class=acts>";
+if(r.url&&r.url.indexOf("http")==0)html+="<a class='btn go' target=_blank href='"+esc(r.url)+"'>Open</a>";
+if(r.handle&&r.handle.indexOf("@")==0)html+="<button class=btn onclick=\"ct('"+esc(r.handle)+"')\">Copy "+esc(r.handle)+"</button>";
+html+="</div>";
+var o=opts.slice();if(r.status&&o.indexOf(r.status)<0)o.unshift(r.status);
+html+="<select class=st onchange=\"sv("+r.id+",this.value)\">"+o.map(function(x){return "<option"+(x==r.status?" selected":"")+">"+esc(x)+"</option>"}).join("")+"</select></div>";
+});
+document.getElementById("list").innerHTML=html||"<div class=load>Nothing here.</div>";
 }
-async function sv(id,val){var e=await sb.from("tracker_outreach").update({status:val}).eq("id",id);if(e.error){toast("Error");return}for(var i=0;i<OUT.length;i++)if(OUT[i].id==id)OUT[i].status=val;toast("Saved")}
+async function sv(id,val){
+  try{
+    var d=await api("save",{table:"tracker_outreach",id:id,status:val});
+    if(d&&d.error){toast("Error");return}
+    for(var i=0;i<OUT.length;i++)if(OUT[i].id==id)OUT[i].status=val;toast("Saved");
+  }catch(e){ if(e&&e.unauth){clearPass();showGate("Session locked. Re-enter password.")} else toast("Error") }
+}
 function ct(t){navigator.clipboard.writeText(t).then(function(){toast("Copied")},function(){toast("Copy failed")})}
 load();
 </script></body></html>
