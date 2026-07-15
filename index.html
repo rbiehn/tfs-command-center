@@ -1,9 +1,9 @@
 <!doctype html>
 <!--
 ============================================================
-  EXOUSIA | TFS - Command Center (home / phone hub)
-  rbiehn.github.io/tfs-command-center
-  Version 1.0 | July 07, 2026
+EXOUSIA | TFS - Command Center (home / phone hub)
+rbiehn.github.io/tfs-command-center
+Version 1.1 | July 15, 2026
 ============================================================
 -->
 <html lang="en"><head>
@@ -11,7 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TFS - Command Center</title>
 <style>
-:root{--bg:#0f1117;--card:#1a1d27;--line:#2c3142;--txt:#e8eaf0;--dim:#9aa0b4;--accent:#c9a94a;--blue:#4a90d9;--green:#3fb27f;}
+:root{--bg:#0f1117;--card:#1a1d27;--line:#2c3142;--txt:#e8eaf0;--dim:#9aa0b4;--accent:#c9a94a;--blue:#4a90d9;--green:#3fb27f;--purple:#a988ff;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
 .wrap{max-width:640px;margin:0 auto;padding:28px 16px 60px}
@@ -24,6 +24,7 @@ h1 span{color:var(--accent)}
 .tile .ic{font-size:26px}
 .tile .nm{font-weight:700;font-size:16px;margin-top:10px}
 .tile .meta{color:var(--dim);font-size:12px;margin-top:3px;min-height:15px}
+.tile.td{border-color:#a988ff55}.tile.td .ic{color:var(--purple)}
 .tile.pub{border-color:#f9731655}.tile.pub .ic{color:#f97316}
 .tile.mt{border-color:#4a90d955}.tile.mt .ic{color:var(--blue)}
 .tile.bf{border-color:#3fb27f55}.tile.bf .ic{color:var(--green)}
@@ -36,18 +37,22 @@ h1 span{color:var(--accent)}
 <h1><span>TFS</span> - Command Center</h1>
 <p class="sub">The First Stone / World of Exousia. Tap a module.</p>
 <div class="grid">
-  <a class="tile pub" href="https://rbiehn.github.io/tfs-publish/">
-    <div class="ic"><i class="fa-solid fa-paper-plane"></i></div>
-    <div><div class="nm">TFS Publish</div><div class="meta">Post across every platform</div></div>
-  </a>
-  <a class="tile mt" href="./master-tracker.html">
-    <div class="ic"><i class="fa-solid fa-table-list"></i></div>
-    <div><div class="nm">Master Tracker</div><div class="meta" id="mtCount">Outreach</div></div>
-  </a>
-  <a class="tile bf" href="./bookfunnel.html">
-    <div class="ic"><i class="fa-solid fa-book-open"></i></div>
-    <div><div class="nm">BookFunnel</div><div class="meta" id="bfCount">Promos</div></div>
-  </a>
+<a class="tile td" href="./today.html">
+<div class="ic"><i class="fa-solid fa-sun"></i></div>
+<div><div class="nm">Today</div><div class="meta">Priorities + deadlines</div></div>
+</a>
+<a class="tile pub" href="https://rbiehn.github.io/tfs-publish/">
+<div class="ic"><i class="fa-solid fa-paper-plane"></i></div>
+<div><div class="nm">TFS Publish</div><div class="meta">Post across every platform</div></div>
+</a>
+<a class="tile mt" href="./master-tracker.html">
+<div class="ic"><i class="fa-solid fa-table-list"></i></div>
+<div><div class="nm">Master Tracker</div><div class="meta" id="mtCount">Outreach</div></div>
+</a>
+<a class="tile bf" href="./bookfunnel.html">
+<div class="ic"><i class="fa-solid fa-book-open"></i></div>
+<div><div class="nm">BookFunnel</div><div class="meta" id="bfCount">Promos</div></div>
+</a>
 </div>
 <div class="foot">Robert Biehn &middot; exousia.world &middot; live from Supabase</div>
 </div>
@@ -55,12 +60,12 @@ h1 span{color:var(--accent)}
 <script>
 var sb=supabase.createClient("https://gewufsselhrzbzrctruo.supabase.co","sb_publishable_Vo58uM-Z-4cKOrAw6pno0g_pMrMuqp6");
 (async function(){
-  try{
-    var o=await sb.from("tracker_outreach").select("id",{count:"exact",head:true});
-    if(typeof o.count==="number")document.getElementById("mtCount").textContent=o.count+" targets";
-    var b=await sb.from("tracker_bookfunnel").select("id",{count:"exact",head:true}).eq("queued",false);
-    if(typeof b.count==="number")document.getElementById("bfCount").textContent=b.count+" active promos";
-  }catch(e){}
+try{
+var o=await sb.from("tracker_outreach").select("id",{count:"exact",head:true});
+if(typeof o.count==="number")document.getElementById("mtCount").textContent=o.count+" targets";
+var b=await sb.from("tracker_bookfunnel").select("id",{count:"exact",head:true}).eq("queued",false);
+if(typeof b.count==="number")document.getElementById("bfCount").textContent=b.count+" active promos";
+}catch(e){}
 })();
 </script>
 </body></html>
