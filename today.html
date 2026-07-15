@@ -1,0 +1,304 @@
+<!doctype html>
+<!--
+============================================================
+  TFS COMMAND CENTER | TODAY (GitHub Pages / Supabase edge fn)
+  rbiehn.github.io/tfs-command-center/today.html
+  Version 1.2 | July 15, 2026
+  Reads one Supabase row (public.command_today, id=1) through the
+  password-gated `today` edge function, which checks the SAME shared
+  command-center secret (TRACKER_PASSWORD) used by master-tracker.html.
+  Login is shared via localStorage tfs_tracker_pass, so entering the
+  password on any command-center page unlocks this one too. No public
+  data read, no key in source, zero LLM calls on view or reload.
+============================================================
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>TFS - Today</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#131826; --panel2:#0f1420; --line:#232a3a;
+    --ink:#e8ecf5; --muted:#93a0b8; --faint:#5f6b82;
+    --accent:#7c5cff; --gold:#e8b955;
+    --red:#ff5c6c; --amber:#f0a83a; --purple:#a988ff; --slate:#5b6b8c; --green:#39d98a;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--purple);text-decoration:none}
+  .wrap{max-width:760px;margin:0 auto;padding:16px 14px 64px}
+
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .top h1{font-size:20px;letter-spacing:.5px;margin:0;font-weight:700}
+  .top .home{font-size:13px;color:var(--muted)}
+  .stamp{font-size:12px;color:var(--faint);margin:2px 0 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .stale{font-size:11px;font-weight:700;letter-spacing:.4px;padding:3px 8px;border-radius:999px;
+    background:rgba(240,168,58,.14);color:var(--amber);border:1px solid rgba(240,168,58,.35);text-transform:uppercase}
+  .btn{appearance:none;border:1px solid var(--line);background:var(--panel);
+    color:var(--ink);font-size:14px;font-weight:600;padding:9px 14px;border-radius:12px;cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+
+  .focus{background:linear-gradient(135deg,#1a1230,#101827);border:1px solid var(--line);
+    border-radius:var(--radius);padding:14px 16px;margin-bottom:16px}
+  .focus .lbl{font-size:11px;letter-spacing:1.5px;color:var(--gold);text-transform:uppercase}
+  .focus .txt{font-size:17px;line-height:1.35;margin-top:6px;font-weight:600}
+
+  .section{margin:0 0 18px}
+  .section > h2{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);
+    margin:0 0 10px;display:flex;align-items:center;gap:8px}
+  .section > h2 .count{color:var(--faint);font-weight:600}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:12px 13px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+  .rank{flex:0 0 auto;width:30px;height:30px;border-radius:9px;background:var(--panel2);
+    border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:15px;color:var(--ink)}
+  .body{flex:1;min-width:0}
+  .title{font-size:16px;font-weight:650;line-height:1.3}
+  .why{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.35}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+  .chip{font-size:11px;font-weight:700;letter-spacing:.4px;padding:3px 8px;border-radius:999px;text-transform:uppercase}
+  .chip.expiring{background:rgba(255,92,108,.15);color:var(--red);border:1px solid rgba(255,92,108,.35)}
+  .chip.due-soon{background:rgba(240,168,58,.14);color:var(--amber);border:1px solid rgba(240,168,58,.35)}
+  .chip.floor{background:rgba(169,136,255,.14);color:var(--purple);border:1px solid rgba(169,136,255,.35)}
+  .chip.normal{background:rgba(91,107,140,.16);color:#a9b6cf;border:1px solid rgba(91,107,140,.35)}
+  .chip.done{background:rgba(57,217,138,.14);color:var(--green);border:1px solid rgba(57,217,138,.35)}
+  .src{font-size:11px;color:var(--faint)}
+  .due{font-size:12px;color:var(--muted);white-space:nowrap}
+
+  .row{display:flex;align-items:center;gap:12px;padding:10px 13px;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;margin-bottom:8px}
+  .row .when{flex:0 0 auto;min-width:62px;font-weight:700;font-size:14px;color:var(--gold)}
+  .row .what{flex:1;min-width:0;font-size:15px}
+  .row .sub{font-size:12px;color:var(--faint)}
+  .dleft{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--muted)}
+  .dleft.now{color:var(--red)}
+
+  .empty{color:var(--faint);font-size:14px;padding:8px 2px}
+
+  .gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;
+    justify-content:center;padding:24px;z-index:50}
+  .gate .box{width:100%;max-width:340px;text-align:center}
+  .gate h2{font-size:16px;font-weight:650;margin:0 0 4px}
+  .gate p{font-size:13px;color:var(--muted);margin:0 0 16px}
+  .gate input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel);color:var(--ink);font-size:16px;text-align:center;margin-bottom:10px}
+  .gate .err{color:var(--red);font-size:12px;min-height:16px;margin-bottom:8px}
+
+  .foot{margin-top:22px;text-align:center;font-size:12px;color:var(--faint);line-height:1.5}
+  @media(min-width:640px){ .wrap{padding-top:24px} .top h1{font-size:24px} }
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="box">
+    <h2>TFS Command Center</h2>
+    <p>Enter your command center password</p>
+    <input id="pw" type="password" inputmode="text" autocomplete="off" placeholder="Password" />
+    <div class="err" id="gateErr"></div>
+    <button class="btn" style="width:100%" onclick="tryUnlock()">Unlock</button>
+  </div>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+  <div class="top">
+    <h1>TODAY</h1>
+    <div style="display:flex;gap:8px;align-items:center">
+      <a class="home" href="./index.html">Command Center</a>
+      <button class="btn" onclick="load()">Reload</button>
+    </div>
+  </div>
+  <div class="stamp" id="stamp">Loading...</div>
+
+  <div class="focus" id="focusWrap" style="display:none">
+    <div class="lbl">Focus</div>
+    <div class="txt" id="focus"></div>
+  </div>
+
+  <div class="section" id="priSec">
+    <h2>Priorities <span class="count" id="priCount"></span></h2>
+    <div id="pri"></div>
+  </div>
+
+  <div class="section" id="dlSec">
+    <h2>Deadlines</h2>
+    <div id="dl"></div>
+  </div>
+
+  <div class="section" id="calSec">
+    <h2>Today's calendar</h2>
+    <div id="cal"></div>
+  </div>
+
+  <div class="section" id="floorSec" style="display:none">
+    <h2>Floors</h2>
+    <div id="floors"></div>
+  </div>
+
+  <div class="foot">
+    Read-only mirror. The Arbiter refreshes this twice daily (morning brief + EOD).<br/>
+    For a fresh recompute now, run arbiter-now. This page never calls Claude.
+  </div>
+</div>
+
+<script>
+/* ---- Config ---------------------------------------------------------- */
+var FUNCTION_URL = "https://gewufsselhrzbzrctruo.supabase.co/functions/v1/today";
+var STALE_HOURS = 14; // matches the Arbiter heartbeat EXPECTED rule
+/* No key and no password live in this file. The password is the shared
+   command-center password, checked server-side by the `today` edge function
+   against the TRACKER_PASSWORD secret, and held in localStorage under the same
+   key the tracker uses (tfs_tracker_pass) so one login covers every page. */
+/* --------------------------------------------------------------------- */
+
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+function urgencyLabel(u){
+  return {expiring:'Expiring',['due-soon']:'Due soon',floor:'Floor',normal:'Normal'}[u] || (u||'');
+}
+function dueText(d){
+  if(!d) return '';
+  var t = new Date(d+'T00:00:00'); var now = new Date(); now.setHours(0,0,0,0);
+  var days = Math.round((t-now)/86400000);
+  if(isNaN(days)) return esc(d);
+  if(days<0) return 'Overdue';
+  if(days===0) return 'Today';
+  if(days===1) return 'Tomorrow';
+  return 'In '+days+'d';
+}
+
+function renderStamp(p, updatedAt){
+  var el = document.getElementById('stamp');
+  var asOf = p.as_of ? new Date(p.as_of).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : 'unknown';
+  var html = 'As of ' + esc(asOf) + (p.source_run ? '  ('+esc(p.source_run)+')' : '');
+  if(updatedAt){
+    var ageH = (Date.now() - new Date(updatedAt).getTime())/3600000;
+    if(ageH > STALE_HOURS){
+      html += ' <span class="stale">Stale ' + Math.round(ageH) + 'h</span>';
+    }
+  }
+  el.innerHTML = html;
+}
+
+function render(p, updatedAt){
+  renderStamp(p, updatedAt);
+
+  if(p.day_focus){
+    document.getElementById('focusWrap').style.display='block';
+    document.getElementById('focus').textContent = p.day_focus;
+  } else { document.getElementById('focusWrap').style.display='none'; }
+
+  var pri = p.priorities || [];
+  document.getElementById('priCount').textContent = pri.length ? '('+pri.length+')' : '';
+  document.getElementById('pri').innerHTML = pri.length ? pri.map(function(it,i){
+    var u = it.urgency || 'normal';
+    var title = it.link ? '<a href="'+esc(it.link)+'" target="_blank" rel="noopener">'+esc(it.title)+'</a>' : esc(it.title);
+    return '<div class="card">'
+      + '<div class="rank">'+esc(it.rank||i+1)+'</div>'
+      + '<div class="body">'
+        + '<div class="title">'+title+'</div>'
+        + (it.why?'<div class="why">'+esc(it.why)+'</div>':'')
+        + '<div class="meta">'
+          + '<span class="chip '+esc(u)+'">'+esc(urgencyLabel(u))+'</span>'
+          + (it.deadline?'<span class="due">'+esc(dueText(it.deadline))+'</span>':'')
+          + (it.source?'<span class="src">'+esc(it.source)+'</span>':'')
+        + '</div>'
+      + '</div></div>';
+  }).join('') : '<div class="empty">Nothing ranked yet.</div>';
+
+  var dl = p.deadlines || [];
+  document.getElementById('dl').innerHTML = dl.length ? dl.map(function(d){
+    var left = (d.days_left!=null)? d.days_left : null;
+    var cls = (left!=null && left<=0)?'dleft now':'dleft';
+    var lt = (left==null)? dueText(d.date) : (left<=0?'Today':(left===1?'1 day':left+' days'));
+    return '<div class="row"><div class="when">'+esc((d.date||'').slice(5))+'</div>'
+      + '<div class="what">'+esc(d.title)+'</div>'
+      + '<div class="'+cls+'">'+esc(lt)+'</div></div>';
+  }).join('') : '<div class="empty">No deadlines logged.</div>';
+
+  var cal = p.calendar || [];
+  document.getElementById('cal').innerHTML = cal.length ? cal.map(function(e){
+    var when = esc(e.start||'') + (e.end?' - '+esc(e.end):'');
+    return '<div class="row"><div class="when">'+when+'</div>'
+      + '<div class="what">'+esc(e.title)
+      + (e.location?' <span class="sub">- '+esc(e.location)+'</span>':'')
+      + '</div></div>';
+  }).join('') : '<div class="empty">No events today.</div>';
+
+  var fl = p.floors || [];
+  var floorSec = document.getElementById('floorSec');
+  if(fl.length){
+    floorSec.style.display='block';
+    document.getElementById('floors').innerHTML = fl.map(function(f){
+      var done = f.status==='done';
+      return '<div class="row"><div class="what">'+esc(f.title)+'</div>'
+        + '<span class="chip '+(done?'done':'floor')+'">'+(done?'Done':'Open')+'</span></div>';
+    }).join('');
+  } else { floorSec.style.display='none'; }
+}
+
+/* ---- Auth + load ----------------------------------------------------- */
+function getPw(){ try{ return localStorage.getItem('tfs_tracker_pass')||''; }catch(e){ return ''; } }
+function setPw(v){ try{ localStorage.setItem('tfs_tracker_pass', v); }catch(e){} }
+function clearPw(){ try{ localStorage.removeItem('tfs_tracker_pass'); }catch(e){} }
+
+function showApp(){ document.getElementById('gate').style.display='none'; document.getElementById('app').style.display='block'; }
+function showGate(msg){
+  document.getElementById('gate').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('gateErr').textContent = msg||'';
+}
+
+async function fetchToday(pw){
+  var r = await fetch(FUNCTION_URL, {
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify({password: pw}),
+    cache:'no-store'
+  });
+  return r;
+}
+
+async function tryUnlock(){
+  var v = document.getElementById('pw').value;
+  document.getElementById('gateErr').textContent='Checking...';
+  try{
+    var r = await fetchToday(v);
+    if(r.status===401){ document.getElementById('gateErr').textContent='Wrong password'; return; }
+    if(r.status===503){ document.getElementById('gateErr').textContent='Server not configured (TRACKER_PASSWORD missing).'; return; }
+    if(!r.ok){ document.getElementById('gateErr').textContent='Error ('+r.status+'). Try again.'; return; }
+    var row = await r.json();
+    setPw(v); showApp();
+    render((row&&row.payload)||{}, row&&row.updated_at);
+  }catch(e){ document.getElementById('gateErr').textContent='Network error. Try again.'; }
+}
+
+async function load(){
+  var pw = getPw();
+  if(!pw){ showGate(''); return; }
+  document.getElementById('stamp').textContent='Loading...';
+  try{
+    var r = await fetchToday(pw);
+    if(r.status===401){ clearPw(); showGate('Session expired, re-enter password'); return; }
+    if(!r.ok){ document.getElementById('stamp').textContent='Could not load Today ('+r.status+'). Tap Reload.'; return; }
+    var row = await r.json();
+    if(!row){ document.getElementById('stamp').textContent='No Today data yet.'; return; }
+    render((row.payload)||{}, row.updated_at);
+  }catch(e){ document.getElementById('stamp').textContent='Network error. Tap Reload.'; }
+}
+
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter' && document.getElementById('gate').style.display!=='none') tryUnlock();
+});
+
+/* Boot: if this tab already has the password, go straight in; else show gate. */
+if(getPw()){ showApp(); load(); } else { showGate(''); }
+</script>
+</body>
+</html>
