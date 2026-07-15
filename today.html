@@ -41,6 +41,12 @@
     display:inline-flex;align-items:center;gap:6px;text-decoration:none}
   .btn:active{transform:translateY(1px)}
   .btn.open{border-color:#a988ff55;color:#cbb7ff}
+  .btn.done{border-color:#39d98a55;color:#8fe6bb}
+  .btn.done.confirm{background:rgba(255,92,108,.15);border-color:#ff5c6c66;color:#ff9aa5}
+  .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:none;
+    align-items:center;gap:6px;background:#171c28;border:1px solid var(--line);border-radius:12px;
+    padding:10px 14px;font-size:13px;color:var(--ink);box-shadow:0 6px 24px rgba(0,0,0,.4);z-index:60}
+  .toast a{color:var(--purple);font-weight:700;cursor:pointer}
 
   .section{margin:0 0 22px}
   .section > h2{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);
@@ -113,6 +119,7 @@
     Full lists live in the <a href="./master-tracker.html">Master Tracker</a> and <a href="./bookfunnel.html">BookFunnel</a>.
   </div>
 </div>
+<div class="toast" id="toast"></div>
 
 <script>
 /* ---- Config ---------------------------------------------------------- */
@@ -165,7 +172,8 @@ function cardHTML(it){
   var actions = [];
   if(it.url) actions.push('<a class="btn open" href="'+esc(it.url)+'" target="_blank" rel="noopener">Open '+esc(SRC_LABEL[src]||'link')+'</a>');
   if(it.contact && /@/.test(it.contact)) actions.push('<a class="btn" href="mailto:'+esc(it.contact)+'">Email</a>');
-  var actionBlock = actions.length ? '<div class="actions">'+actions.join('')+'</div>' : '';
+  actions.push('<button class="btn done" data-src="'+esc(src)+'" data-id="'+esc(it.id)+'" onclick="markDone(this)">Done</button>');
+  var actionBlock = '<div class="actions">'+actions.join('')+'</div>';
 
   return '<div class="card">'
     + '<div class="chead"><div class="ctitle">'+esc(it.name||'(untitled)')+'</div>'
@@ -206,6 +214,40 @@ function toggleMore(btn){
   var pre = btn.closest('.copywrap').querySelector('.copy');
   var open = pre.classList.toggle('open');
   btn.textContent = open ? 'Collapse' : 'Expand';
+}
+
+/* ---- Mark done / undo ------------------------------------------------ */
+var undoTimer = null;
+async function fetchOp(op, src, id){
+  try{
+    var r = await fetch(FUNCTION_URL, {method:'POST',headers:{'content-type':'application/json'},
+      body: JSON.stringify({password:getPw(), op:op, table:src, id:id}), cache:'no-store'});
+    if(!r.ok) return {ok:false};
+    return await r.json();
+  }catch(e){ return {ok:false}; }
+}
+function markDone(btn){
+  if(btn.classList.contains('confirm')){
+    var src=btn.getAttribute('data-src'), id=Number(btn.getAttribute('data-id'));
+    btn.textContent='...'; btn.disabled=true;
+    fetchOp('done', src, id).then(function(r){
+      if(r && r.ok){ showUndo(src,id); load(); }
+      else { btn.disabled=false; btn.classList.remove('confirm'); btn.textContent='Retry'; }
+    });
+    return;
+  }
+  btn.classList.add('confirm'); btn.textContent='Confirm done?';
+  setTimeout(function(){ if(btn.classList){ btn.classList.remove('confirm'); btn.textContent='Done'; } }, 3000);
+}
+function showUndo(src,id){
+  var t=document.getElementById('toast');
+  t.innerHTML='Marked done <a id="undoBtn">Undo</a>';
+  t.style.display='flex';
+  document.getElementById('undoBtn').onclick=function(){
+    fetchOp('undone',src,id).then(function(){ t.style.display='none'; load(); });
+  };
+  clearTimeout(undoTimer);
+  undoTimer=setTimeout(function(){ t.style.display='none'; }, 6000);
 }
 
 /* ---- Auth + load ----------------------------------------------------- */
