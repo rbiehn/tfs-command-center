@@ -1,0 +1,154 @@
+<!doctype html>
+<!--
+============================================================
+  EXOUSIA | TFS - StoryOrigin Tracker (Command Center module)
+  rbiehn.github.io/tfs-command-center/storyorigin.html
+  Version 1.0 | July 15, 2026
+============================================================
+  Reads/writes go through the password-gated `tracker` edge function
+  (service role, server-side; shared password with the other pages).
+  Renders tracker_storyorigin: 1:1 swaps + group promos with the
+  engagement schema swap decisions run on (list size, open %, click %,
+  clicks, signups).
+============================================================
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TFS - StoryOrigin</title>
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--card2:#222634;--line:#2c3142;--txt:#e8eaf0;--dim:#9aa0b4;--accent:#c9a94a;--so:#b07de0;--green:#3fb27f;--blue:#4a90d9;--red:#d9694a;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.4}
+.wrap{max-width:640px;margin:0 auto;padding:0 12px 80px}
+header{position:sticky;top:0;z-index:20;background:#0f1117ee;backdrop-filter:blur(6px);padding:10px 0 6px;border-bottom:1px solid var(--line)}
+.back{color:var(--dim);font-size:13px;text-decoration:none}
+h1{font-size:17px;margin:6px 0 8px}h1 span{color:var(--so)}
+.tools{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+input.search{flex:1;min-width:140px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:14px}
+.chip{padding:6px 10px;border-radius:16px;border:1px solid var(--line);background:var(--card);color:var(--dim);font-size:12px;cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--card2);color:var(--txt);border-color:var(--so)}
+.count{color:var(--dim);font-size:12px;margin:2px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.card.ready{border-color:var(--so)}.card.shared{border-color:var(--green)}.card.declined{opacity:.55}
+.row1{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.nm{font-weight:600;font-size:15px}.meta{color:var(--dim);font-size:12.5px;margin-top:3px;word-break:break-word}
+.pill{font-size:10.5px;padding:2px 7px;border-radius:10px;background:var(--card2);color:var(--dim);white-space:nowrap}
+.pill.swap{color:var(--so);border:1px solid #43345a}.pill.promo{color:var(--blue);border:1px solid #29405c}
+.eng{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.stat{font-size:11.5px;padding:3px 7px;border-radius:7px;background:var(--card2);border:1px solid var(--line);color:var(--txt)}
+.stat b{color:var(--so)}
+.sub{margin-top:6px;font-size:12.5px;color:var(--accent)}
+.acts{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+.btn{flex:1;min-width:92px;text-align:center;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--card2);color:var(--txt);font-size:13px;font-weight:600;cursor:pointer;text-decoration:none}
+.btn.go{background:var(--so);color:#160d20;border-color:var(--so)}
+select.st{width:100%;margin-top:8px;padding:8px;border-radius:9px;border:1px solid var(--line);background:var(--card2);color:var(--txt);font-size:13px}
+.load{text-align:center;color:var(--dim);padding:40px}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--so);color:#160d20;padding:9px 16px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:.2s;z-index:50}
+.toast.on{opacity:1}
+#gate{display:none;position:fixed;inset:0;background:var(--bg);z-index:100;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center}
+#gate .g-t{font-size:15px;font-weight:700}#gate .g-t span{color:var(--so)}
+#gate .g-s{color:var(--dim);font-size:13px;margin:6px 0 18px}
+#gate input{width:100%;max-width:300px;padding:12px 13px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:16px;text-align:center}
+#gate button{margin-top:12px;width:100%;max-width:300px;padding:12px;border-radius:10px;border:none;background:var(--so);color:#160d20;font-weight:700;font-size:14px;cursor:pointer}
+#gateMsg{color:var(--red);font-size:12.5px;margin-top:12px;min-height:16px}
+</style></head>
+<body>
+<div id="gate">
+  <div class="g-t"><span>TFS</span> Command Center</div>
+  <div class="g-s">Enter password to unlock the tracker</div>
+  <input id="gateInput" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')unlock()">
+  <button onclick="unlock()">Unlock</button>
+  <div id="gateMsg"></div>
+</div>
+<div class="wrap">
+<header>
+<a class="back" href="./">&larr; Command Center</a>
+<h1><span>StoryOrigin</span> Swaps + Promos</h1>
+<div class="tools" id="tools"></div>
+<div class="count" id="count"></div>
+</header>
+<div id="list"><div class="load">Loading...</div></div>
+</div>
+<div class="toast" id="toast">Saved</div>
+<script>
+var FN="https://gewufsselhrzbzrctruo.supabase.co/functions/v1/tracker";
+// Publishable key sent ONLY to satisfy the Supabase API gateway. It grants
+// nothing: anon has no access to the tracker tables; the function does the
+// work with the service role after checking the password.
+var AK="sb_publishable_Vo58uM-Z-4cKOrAw6pno0g_pMrMuqp6";
+var PASSKEY="tfs_tracker_pass";
+var SO=[],q="",f="all";
+var statuses=["Staged","Staged / Ready to send","Submitted-Pending","Approved-Joined","Shared","Declined"];
+function esc(s){s=s==null?"":""+s;return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function toast(m){var t=document.getElementById("toast");t.textContent=m||"Saved";t.classList.add("on");setTimeout(function(){t.classList.remove("on")},1400)}
+function getPass(){try{return localStorage.getItem(PASSKEY)||""}catch(e){return""}}
+function setPassVal(p){try{localStorage.setItem(PASSKEY,p)}catch(e){}}
+function clearPass(){try{localStorage.removeItem(PASSKEY)}catch(e){}}
+function showGate(msg){var g=document.getElementById("gate");g.style.display="flex";document.getElementById("gateMsg").textContent=msg||"";var i=document.getElementById("gateInput");i.value="";setTimeout(function(){i.focus()},50)}
+function hideGate(){document.getElementById("gate").style.display="none"}
+function unlock(){var v=(document.getElementById("gateInput").value||"").trim();if(!v)return;setPassVal(v);document.getElementById("gateMsg").textContent="Checking...";load()}
+async function api(action,extra){
+  var body=Object.assign({pass:getPass()},extra||{});
+  var r=await fetch(FN+"?action="+action,{method:"POST",headers:{"content-type":"application/json","apikey":AK,"authorization":"Bearer "+AK},body:JSON.stringify(body)});
+  if(r.status===401){var e=new Error("unauthorized");e.unauth=true;throw e}
+  return r.json();
+}
+async function load(){
+  if(!getPass()){showGate();return}
+  try{
+    var d=await api("list");
+    if(d&&d.error){document.getElementById("list").innerHTML="<div class=load>"+esc(d.error)+"</div>";return}
+    SO=(d&&d.so)||[];hideGate();render();
+  }catch(e){
+    if(e&&e.unauth){clearPass();showGate("Wrong password. Try again.");return}
+    document.getElementById("list").innerHTML="<div class=load>"+esc((e&&e.message)||"Error")+"</div>";
+  }
+}
+function render(){
+var h="<input class=search id=q placeholder=Search... value=\""+esc(q)+"\">";
+[["all","All"],["swap","Swaps"],["promo","Group Promos"]].forEach(function(c){h+="<div class='chip"+(f==c[0]?" on":"")+"' onclick=\"setF('"+c[0]+"')\">"+c[1]+"</div>"});
+document.getElementById("tools").innerHTML=h;
+document.getElementById("q").addEventListener("input",function(e){q=e.target.value;list()});
+list();
+}
+function setF(v){f=v;render()}
+function match(r){if(!q)return true;return JSON.stringify(r).toLowerCase().indexOf(q.toLowerCase())>=0}
+function stat(lbl,val){return val==null||val===""?"":"<span class=stat>"+esc(lbl)+" <b>"+esc(val)+"</b></span>"}
+function list(){
+var rows=SO.filter(function(r){if(f=="all")return true;return (r.kind||"").toLowerCase()==f}).filter(match);
+document.getElementById("count").textContent=rows.length+(f=="swap"?" swaps":f=="promo"?" promos":" items");
+var html="";
+rows.forEach(function(r){
+var st=(r.status||"");
+var cls="card"+(st=="Staged / Ready to send"?" ready":"")+(st=="Shared"?" shared":"")+(st=="Declined"?" declined":"");
+var kind=(r.kind||"").toLowerCase();
+var kpill=kind=="swap"?"<span class='pill swap'>Swap</span>":kind=="promo"?"<span class='pill promo'>Promo</span>":"<span class=pill>"+esc(r.kind||"")+"</span>";
+html+="<div class='"+cls+"'><div class=row1><div><div class=nm>"+esc(r.name)+"</div><div class=meta>"+(r.host?esc(r.host)+" &middot; ":"")+esc(r.promo_type||r.genres||r.runs||"")+"</div></div>"+kpill+"</div>";
+var eng=stat("List",r.partner_list_size)+stat("Open",r.partner_open_rate)+stat("Click",r.partner_click_rate)+stat("Clicks",r.clicks)+stat("Signups",r.signups);
+if(eng)html+="<div class=eng>"+eng+"</div>";
+var line2=[];
+if(r.submit_by)line2.push("Submit by "+esc(r.submit_by));
+if(r.samples_ok!=null)line2.push(r.samples_ok?"Samples OK":"Full only");
+if(line2.length)html+="<div class=meta>"+line2.join(" &middot; ")+"</div>";
+if(r.share_date)html+="<div class=sub>Share "+esc(r.share_date)+"</div>";
+html+="<div class=acts>";
+if(r.join_url)html+="<a class='btn go' target=_blank href='"+esc(r.join_url)+"'>Open / Join</a>";
+if(r.note)html+="<button class=btn onclick=\"cn("+r.id+")\">Copy note</button>";
+if(r.tracking_link)html+="<a class=btn target=_blank href='"+esc(r.tracking_link)+"'>Tracking link</a>";
+html+="</div>";
+var opts=statuses.slice();if(st&&opts.indexOf(st)<0)opts.unshift(st);
+html+="<select class=st onchange=\"sv("+r.id+",this.value)\">"+opts.map(function(o){return "<option"+(o==st?" selected":"")+">"+esc(o)+"</option>"}).join("")+"</select></div>";
+});
+document.getElementById("list").innerHTML=html||"<div class=load>Nothing here.</div>";
+}
+async function sv(id,val){
+  try{
+    var d=await api("save",{table:"tracker_storyorigin",id:id,status:val});
+    if(d&&d.error){toast("Error");return}
+    for(var i=0;i<SO.length;i++)if(SO[i].id==id)SO[i].status=val;toast("Saved");
+  }catch(e){ if(e&&e.unauth){clearPass();showGate("Session locked. Re-enter password.")} else toast("Error") }
+}
+function cn(id){var r=SO.filter(function(x){return x.id==id})[0];if(r&&r.note)navigator.clipboard.writeText(r.note).then(function(){toast("Note copied")},function(){toast("Copy failed")})}
+load();
+</script></body></html>
