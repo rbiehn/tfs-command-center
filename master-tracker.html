@@ -3,12 +3,15 @@
 ============================================================
   EXOUSIA | TFS - Master Tracker (Command Center module)
   rbiehn.github.io/tfs-command-center/master-tracker.html
-  Version 3.0 | July 11, 2026
+  Version 3.1 | July 15, 2026
 ============================================================
   Password-gated (enter once, saved locally). NO direct table
   access: reads/writes go through the `tracker` edge function
   (service role, server-side). Cards show enrichment: fit flag,
   contact button, PR-box, and a Copy-pitch button.
+  v3.1: surface daily-engine cols (proposed_send_date, tracking_link,
+  next_pitch_copy) + a History button reading outreach_touch_log
+  via the tracker `touches` action.
 ============================================================
 -->
 <html lang="en"><head>
@@ -84,7 +87,7 @@ var FN="https://gewufsselhrzbzrctruo.supabase.co/functions/v1/tracker";
 var AK="sb_publishable_Vo58uM-Z-4cKOrAw6pno0g_pMrMuqp6";
 var PASSKEY="tfs_tracker_pass";
 var OUT=[],q="",tab="All";
-var opts=["Not started","Not contacted","Contacted","Replied","Confirmed","Declined","Submitted","Live/Done"];
+var opts=["Not started","Not contacted","Contacted","Replied","Confirmed","Declined","Submitted","Staged / Ready to send","Live/Done"];
 function esc(s){s=s==null?"":""+s;return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
 function toast(m){var t=document.getElementById("toast");t.textContent=m||"Saved";t.classList.add("on");setTimeout(function(){t.classList.remove("on")},1400)}
 function getPass(){try{return localStorage.getItem(PASSKEY)||""}catch(e){return""}}
@@ -144,15 +147,20 @@ function list(){
     html+="<div class='card"+(done?" done":"")+(en?" enr":"")+"'>";
     html+="<div class=row1><div class=nm>"+esc(r.name)+(en?" <span class=enrdot>&#10022;</span>":"")+"</div></div>";
     html+="<div class=meta>"+esc(r.channel||"")+(r.reach?" &middot; "+esc(r.reach):"")+(r.priority?" &middot; P"+esc(r.priority):"")+"</div>";
+    if(r.proposed_send_date||r.tracking_link)html+="<div class=meta>"+(r.proposed_send_date?"Send: "+esc(r.proposed_send_date):"")+(r.tracking_link?" &middot; <a target=_blank href='"+esc(r.tracking_link)+"'>tracking link</a>":"")+"</div>";
     if(r.fit_flag)html+="<div class=flag>&#9888; "+esc(r.fit_flag)+"</div>";
     if(r.fit)html+="<div class=fit>"+esc(r.fit)+"</div>";
     if(r.pr_box&&r.pr_box.indexOf("N/A")<0&&r.pr_box.indexOf("None")<0)html+="<span class='pill pr'>PR box: "+esc(r.pr_box)+"</span>";
     if(en&&r.contact_verified===false)html+="<div class=verify>&#9888; Contact unverified - confirm before sending</div>";
     if(r.outreach_copy)html+="<div class=pitch id='p"+r.id+"'>"+esc(r.outreach_copy)+"</div>";
+    if(r.next_pitch_copy)html+="<div class=pitch id='np"+r.id+"'>"+esc(r.next_pitch_copy)+"</div>";
+    html+="<div class=pitch id='h"+r.id+"'></div>";
     html+="<div class=acts>";
     if(r.url&&r.url.indexOf("http")==0)html+="<a class='btn' target=_blank href='"+esc(r.url)+"'>Profile</a>";
     html+=contactBtn(r);
     if(r.outreach_copy){var lbl=isNote(r.outreach_copy)?"View note":"Copy pitch";html+="<button class='btn pit' onclick=\"cp("+r.id+",this)\">"+lbl+"</button>";}
+    if(r.next_pitch_copy)html+="<button class='btn' onclick=\"cpn("+r.id+")\">Next pitch</button>";
+    html+="<button class='btn' onclick=\"th("+r.id+")\">History</button>";
     html+="</div>";
     var o=opts.slice();if(r.status&&o.indexOf(r.status)<0)o.unshift(r.status);
     html+="<select class=st onchange=\"sv("+r.id+",this.value)\">"+o.map(function(x){return "<option"+(x==r.status?" selected":"")+">"+esc(x)+"</option>"}).join("")+"</select>";
@@ -171,5 +179,7 @@ function ct(t){navigator.clipboard.writeText(t).then(function(){toast("Copied")}
 function cpv(id){var r=rowById(id);if(r)ct((r.contact_value||r.contact||"").replace(/\s*\|\s*/g,"  |  "))}
 function cp(id,btn){var r=rowById(id);if(!r)return;var box=document.getElementById("p"+id);if(box)box.classList.toggle("on");
   if(!isNote(r.outreach_copy))navigator.clipboard.writeText(r.outreach_copy).then(function(){toast("Pitch copied")},function(){toast("Copy failed")});}
+function cpn(id){var r=rowById(id);if(!r||!r.next_pitch_copy)return;var box=document.getElementById("np"+id);if(box)box.classList.toggle("on");navigator.clipboard.writeText(r.next_pitch_copy).then(function(){toast("Next pitch copied")},function(){toast("Copy failed")});}
+async function th(id){var box=document.getElementById("h"+id);if(!box)return;if(box.classList.contains("on")){box.classList.remove("on");return}box.textContent="Loading history...";box.classList.add("on");try{var d=await api("touches",{outreach_id:id});if(d&&d.error){box.textContent=esc(d.error);return}var t=(d&&d.touches)||[];if(!t.length){box.textContent="No touches logged yet.";return}box.innerHTML=t.map(function(x){return "<div style='border-bottom:1px solid var(--line);padding:5px 0'><b>"+esc((x.touched_at||"").slice(0,10))+"</b>"+(x.channel?" &middot; "+esc(x.channel):"")+(x.touch_reason?" &middot; "+esc(x.touch_reason):"")+(x.outcome?" &middot; "+esc(x.outcome):"")+(x.pitch_copy?"<div style='color:#cfd3e0;margin-top:3px;white-space:pre-wrap'>"+esc(x.pitch_copy)+"</div>":"")+"</div>"}).join("")}catch(e){if(e&&e.unauth){clearPass();showGate("Session locked. Re-enter password.")}else box.textContent="Error"}}
 load();
 </script></body></html>
