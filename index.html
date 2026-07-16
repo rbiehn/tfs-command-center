@@ -3,10 +3,7 @@
 ============================================================
 EXOUSIA | TFS - Command Center (home / phone hub)
 rbiehn.github.io/tfs-command-center
-Version 1.2 | July 15, 2026
-============================================================
-  v1.2: add StoryOrigin module tile (swaps + group promos), served
-  from tracker_storyorigin via the password-gated tracker edge fn.
+Version 1.1 | July 15, 2026
 ============================================================
 -->
 <html lang="en"><head>
@@ -14,7 +11,7 @@ Version 1.2 | July 15, 2026
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TFS - Command Center</title>
 <style>
-:root{--bg:#0f1117;--card:#1a1d27;--line:#2c3142;--txt:#e8eaf0;--dim:#9aa0b4;--accent:#c9a94a;--blue:#4a90d9;--green:#3fb27f;--purple:#a988ff;--so:#b07de0;}
+:root{--bg:#0f1117;--card:#1a1d27;--line:#2c3142;--txt:#e8eaf0;--dim:#9aa0b4;--accent:#c9a94a;--blue:#4a90d9;--green:#3fb27f;--purple:#a988ff;}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
 .wrap{max-width:640px;margin:0 auto;padding:28px 16px 60px}
@@ -31,7 +28,6 @@ h1 span{color:var(--accent)}
 .tile.pub{border-color:#f9731655}.tile.pub .ic{color:#f97316}
 .tile.mt{border-color:#4a90d955}.tile.mt .ic{color:var(--blue)}
 .tile.bf{border-color:#3fb27f55}.tile.bf .ic{color:var(--green)}
-.tile.so{border-color:#b07de055}.tile.so .ic{color:var(--so)}
 .soon{opacity:.5;pointer-events:none}
 .foot{color:var(--dim);font-size:11px;text-align:center;margin-top:26px}
 </style>
@@ -43,7 +39,7 @@ h1 span{color:var(--accent)}
 <div class="grid">
 <a class="tile td" href="./today.html">
 <div class="ic"><i class="fa-solid fa-sun"></i></div>
-<div><div class="nm">Today</div><div class="meta">Priorities + deadlines</div></div>
+<div><div class="nm">Today</div><div class="meta">Sends + shares due</div></div>
 </a>
 <a class="tile pub" href="https://rbiehn.github.io/tfs-publish/">
 <div class="ic"><i class="fa-solid fa-paper-plane"></i></div>
@@ -57,10 +53,6 @@ h1 span{color:var(--accent)}
 <div class="ic"><i class="fa-solid fa-book-open"></i></div>
 <div><div class="nm">BookFunnel</div><div class="meta" id="bfCount">Promos</div></div>
 </a>
-<a class="tile so" href="./storyorigin.html">
-<div class="ic"><i class="fa-solid fa-arrows-rotate"></i></div>
-<div><div class="nm">StoryOrigin</div><div class="meta" id="soCount">Swaps + promos</div></div>
-</a>
 </div>
 <div class="foot">Robert Biehn &middot; exousia.world &middot; live from Supabase</div>
 </div>
@@ -73,8 +65,6 @@ var o=await sb.from("tracker_outreach").select("id",{count:"exact",head:true});
 if(typeof o.count==="number")document.getElementById("mtCount").textContent=o.count+" targets";
 var b=await sb.from("tracker_bookfunnel").select("id",{count:"exact",head:true}).eq("queued",false);
 if(typeof b.count==="number")document.getElementById("bfCount").textContent=b.count+" active promos";
-var s=await sb.from("tracker_storyorigin").select("id",{count:"exact",head:true});
-if(typeof s.count==="number")document.getElementById("soCount").textContent=s.count+" swaps + promos";
 }catch(e){}
 })();
 </script>
