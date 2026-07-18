@@ -1,0 +1,200 @@
+<!doctype html>
+<!--
+============================================================
+  EXOUSIA | TFS - Promo ROI Tracker (Command Center module)
+  rbiehn.github.io/tfs-command-center/promo-roi.html
+  Version 1 | July 16, 2026
+============================================================
+  Subs gained per channel: BookFunnel, StoryOrigin, BookSweeps.
+  Reads through the password-gated `tracker` edge function (v6+),
+  same lock + shared password as BookFunnel / Master Tracker.
+  Free channels (BF/SO) score on subs volume; BookSweeps scores
+  on cost per confirmed sub (spend / confirmed).
+============================================================
+-->
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TFS - Promo ROI</title>
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--card2:#222634;--line:#2c3142;--txt:#e8eaf0;--dim:#9aa0b4;--accent:#c9a94a;--green:#3fb27f;--blue:#4a90d9;--purple:#a988ff;--red:#d9694a;--amber:#e0a53a;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.4}
+.wrap{max-width:640px;margin:0 auto;padding:0 12px 80px}
+header{position:sticky;top:0;z-index:20;background:#0f1117ee;backdrop-filter:blur(6px);padding:10px 0 6px;border-bottom:1px solid var(--line)}
+.back{color:var(--dim);font-size:13px;text-decoration:none}
+h1{font-size:17px;margin:6px 0 8px}h1 span{color:var(--accent)}
+.tools{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chip{padding:6px 10px;border-radius:16px;border:1px solid var(--line);background:var(--card);color:var(--dim);font-size:12px;cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--card2);color:var(--txt);border-color:var(--accent)}
+.load{text-align:center;color:var(--dim);padding:40px}
+.sec{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin:18px 2px 8px}
+/* channel summary cards */
+.chan{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:10px;border-left:4px solid var(--line)}
+.chan.bf{border-left-color:var(--green)} .chan.so{border-left-color:var(--purple)} .chan.bs{border-left-color:var(--amber)}
+.chan .ct{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.chan .nm{font-weight:700;font-size:16px}
+.chan .st{color:var(--dim);font-size:12px;margin-top:2px}
+.nums{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap}
+.n b{display:block;font-size:20px;font-weight:700;line-height:1.1}
+.n s{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.03em;text-decoration:none}
+.verdict{font-size:11px;font-weight:700;color:#0d0f14;border-radius:10px;padding:3px 9px;white-space:nowrap}
+.v-strong{background:var(--green)}.v-ok{background:var(--blue);color:#fff}.v-weak{background:var(--amber)}.v-poor{background:var(--red);color:#fff}.v-none{background:var(--card2);color:var(--dim)}
+/* detail rows */
+.row{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:8px}
+.row .r1{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.row .nm2{font-weight:600;font-size:14px}
+.row .m2{color:var(--dim);font-size:12px;margin-top:2px}
+.row .rn{display:flex;gap:14px;margin-top:8px}
+.row .rn span{font-size:12.5px;color:var(--dim)}.row .rn b{color:var(--txt);font-size:15px}
+.badge{font-size:10px;font-weight:700;color:#0d0f14;border-radius:5px;padding:1px 6px;flex:none}
+.badge.BF{background:var(--green)}.badge.SO{background:var(--purple);color:#fff}.badge.BS{background:var(--amber)}
+.note{color:var(--dim);font-size:11.5px;margin-top:16px;line-height:1.6}
+/* gate */
+#gate{display:none;position:fixed;inset:0;background:var(--bg);z-index:100;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center}
+#gate .g-t{font-size:15px;font-weight:700}#gate .g-t span{color:var(--green)}
+#gate .g-s{color:var(--dim);font-size:13px;margin:6px 0 18px}
+#gate input{width:100%;max-width:300px;padding:12px 13px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:16px;text-align:center}
+#gate button{margin-top:12px;width:100%;max-width:300px;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#141414;font-weight:700;font-size:14px;cursor:pointer}
+#gateMsg{color:var(--red);font-size:12.5px;margin-top:12px;min-height:16px}
+</style></head>
+<body>
+<div id="gate">
+  <div class="g-t"><span>TFS</span> Command Center</div>
+  <div class="g-s">Enter password to unlock the tracker</div>
+  <input id="gateInput" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')unlock()">
+  <button onclick="unlock()">Unlock</button>
+  <div id="gateMsg"></div>
+</div>
+<div class="wrap">
+<header>
+<a class="back" href="./">&larr; Command Center</a>
+<h1><span>Promo ROI</span> - subs per channel</h1>
+<div class="tools" id="tools"></div>
+</header>
+<div id="body"><div class="load">Loading...</div></div>
+</div>
+<script>
+var FN="https://gewufsselhrzbzrctruo.supabase.co/functions/v1/tracker";
+var AK="sb_publishable_Vo58uM-Z-4cKOrAw6pno0g_pMrMuqp6";
+var PASSKEY="tfs_tracker_pass";
+var DATA={bf:[],so:[],bs:[]},view="all";
+
+function esc(s){s=s==null?"":""+s;return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function num(v){return (v==null)?"--":v}
+function getPass(){try{return localStorage.getItem(PASSKEY)||""}catch(e){return""}}
+function setPassVal(p){try{localStorage.setItem(PASSKEY,p)}catch(e){}}
+function clearPass(){try{localStorage.removeItem(PASSKEY)}catch(e){}}
+function showGate(msg){var g=document.getElementById("gate");g.style.display="flex";document.getElementById("gateMsg").textContent=msg||"";var i=document.getElementById("gateInput");i.value="";setTimeout(function(){i.focus()},50)}
+function hideGate(){document.getElementById("gate").style.display="none"}
+function unlock(){var v=(document.getElementById("gateInput").value||"").trim();if(!v)return;setPassVal(v);document.getElementById("gateMsg").textContent="Checking...";load()}
+async function api(action,extra){
+  var body=Object.assign({pass:getPass()},extra||{});
+  var r=await fetch(FN+"?action="+action,{method:"POST",headers:{"content-type":"application/json","apikey":AK,"authorization":"Bearer "+AK},body:JSON.stringify(body)});
+  if(r.status===401){var e=new Error("unauthorized");e.unauth=true;throw e}
+  return r.json();
+}
+async function load(){
+  if(!getPass()){showGate();return}
+  try{
+    var d=await api("list");
+    if(d&&d.error){document.getElementById("body").innerHTML="<div class=load>"+esc(d.error)+"</div>";return}
+    DATA.bf=(d&&d.bf)||[];DATA.so=(d&&d.so)||[];DATA.bs=(d&&d.bs)||[];
+    hideGate();render();
+  }catch(e){
+    if(e&&e.unauth){clearPass();showGate("Wrong password. Try again.");return}
+    document.getElementById("body").innerHTML="<div class=load>"+esc((e&&e.message)||"Error")+"</div>";
+  }
+}
+// ---- classifiers ----
+function bfJoined(r){var s=(r.status||"").toLowerCase();return s==="joined"||s.indexOf("shared")===0}
+function soLive(r){var s=(r.status||"").toLowerCase();return s.indexOf("approved-joined")===0||s.indexOf("shared")===0||s.indexOf("confirmed")===0||s.indexOf("existing swap")===0}
+function bsActive(r){var s=(r.status||"").toLowerCase();return s==="active"||s==="submitted"}
+function sum(arr,f){var t=0,any=false;arr.forEach(function(r){var v=f(r);if(v!=null){t+=Number(v)||0;any=true}});return any?t:null}
+function verdictFree(joinedCount,subs){
+  if(subs==null)return ["No data yet","v-none"];
+  if(subs>=25)return ["Strong","v-strong"];
+  if(subs>=10)return ["OK","v-ok"];
+  if(subs>=1)return ["Weak","v-weak"];
+  return ["Zero so far","v-none"];
+}
+function verdictPaid(spend,conf){
+  if(!conf){return spend>0?["Spending, 0 subs","v-poor"]:["Not started","v-none"];}
+  var cps=spend/conf;
+  if(cps<0.5)return ["Strong "+cps.toFixed(2)+"/sub","v-strong"];
+  if(cps<=1)return ["OK "+cps.toFixed(2)+"/sub","v-ok"];
+  return ["Pull back "+cps.toFixed(2)+"/sub","v-poor"];
+}
+// ---- channel cards ----
+function channelCards(){
+  var out="";
+  // BookFunnel
+  var bfj=DATA.bf.filter(bfJoined);
+  var bfSubs=sum(bfj,function(r){return r.signups});
+  var vf=verdictFree(bfj.length,bfSubs);
+  out+=chanCard("bf","BookFunnel",bfj.length+" joined group promos",[
+    ["Subs gained",bfSubs==null?"--":bfSubs],["Spend","$0"],["Cost/sub","free"]],vf);
+  // StoryOrigin
+  var soj=DATA.so.filter(soLive);
+  var soSubs=sum(soj,function(r){return r.signups});
+  var vs=verdictFree(soj.length,soSubs);
+  out+=chanCard("so","StoryOrigin",soj.length+" live promos + swaps",[
+    ["Subs gained",soSubs==null?"--":soSubs],["Spend","$0"],["Cost/sub","free"]],vs);
+  // BookSweeps
+  var elb=DATA.bs.filter(function(r){return r.product==="ELB"});
+  var runRate=0;elb.forEach(function(r){if((r.status||"").toLowerCase()!=="cancelled"&&(r.status||"").toLowerCase()!=="skip")runRate+=Number(r.cost_monthly)||0;});
+  var spend=sum(DATA.bs,function(r){return r.spend_total})||0;
+  var conf=sum(DATA.bs,function(r){return r.confirmed});
+  var vb=verdictPaid(spend,conf);
+  var runLabel=(spend>0?"$"+spend+" spent":"$"+runRate+"/mo projected");
+  out+=chanCard("bs","BookSweeps",elb.length+" ELB genres + PFP",[
+    ["Confirmed subs",conf==null?"--":conf],["Spend",runLabel],["Genre $/mo","$100 ea"]],vb);
+  return out;
+}
+function chanCard(cls,name,st,nums,verdict){
+  var h="<div class='chan "+cls+"'><div class=ct><div><div class=nm>"+esc(name)+"</div><div class=st>"+esc(st)+"</div></div>"
+    +"<span class='verdict "+verdict[1]+"'>"+esc(verdict[0])+"</span></div><div class=nums>";
+  nums.forEach(function(n){h+="<div class=n><b>"+esc(n[1])+"</b><s>"+esc(n[0])+"</s></div>";});
+  return h+"</div></div>";
+}
+// ---- detail ----
+function detailRows(){
+  var h="";
+  if(view==="all"||view==="bf"){
+    var bfj=DATA.bf.filter(bfJoined).sort(function(a,b){return (b.signups||0)-(a.signups||0)});
+    h+="<div class=sec>BookFunnel promos ("+bfj.length+")</div>";
+    bfj.forEach(function(r){h+=itemRow("BF",r.name,(r.host||"")+(r.share_date?" &middot; share "+r.share_date:""),r.signups,r.clicks,null);});
+  }
+  if(view==="all"||view==="so"){
+    var soj=DATA.so.filter(soLive).sort(function(a,b){return (b.signups||0)-(a.signups||0)});
+    h+="<div class=sec>StoryOrigin promos + swaps ("+soj.length+")</div>";
+    soj.forEach(function(r){h+=itemRow("SO",r.name,(r.kind||"")+(r.share_date?" &middot; share "+r.share_date:""),r.signups,r.clicks,null);});
+  }
+  if(view==="all"||view==="bs"){
+    var bs=DATA.bs.slice().sort(function(a,b){return (a.sort_order||0)-(b.sort_order||0)});
+    h+="<div class=sec>BookSweeps ELB + PFP ("+bs.length+")</div>";
+    bs.forEach(function(r){
+      var meta=(r.product||"")+" &middot; "+(r.status||"")+(r.renewal_date?" &middot; cancel-by "+r.renewal_date:"");
+      var costLabel=r.product==="PFP"?"free":("$"+(r.cost_monthly||0)+"/mo");
+      h+="<div class=row><div class=r1><div><div class=nm2><span class='badge BS'>BS</span> "+esc(r.genre||r.product)+"</div><div class=m2>"+esc(meta)+"</div></div></div>"
+        +"<div class=rn><span><b>"+num(r.confirmed)+"</b> confirmed</span><span><b>"+num(r.signups)+"</b> raw</span><span><b>"+esc(costLabel)+"</b></span>"
+        +(r.product==="PFP"?"<span><b>"+num(r.followers_delta)+"</b> followers</span>":"")+"</div></div>";
+    });
+  }
+  return h;
+}
+function itemRow(src,name,meta,subs,clicks,extra){
+  return "<div class=row><div class=r1><div><div class=nm2><span class='badge "+src+"'>"+src+"</span> "+esc(name)+"</div><div class=m2>"+meta+"</div></div></div>"
+    +"<div class=rn><span><b>"+num(subs)+"</b> subs</span><span><b>"+num(clicks)+"</b> clicks</span></div></div>";
+}
+function render(){
+  var tabs=[["all","All"],["bf","BookFunnel"],["so","StoryOrigin"],["bs","BookSweeps"]];
+  var t="";tabs.forEach(function(c){t+="<div class='chip"+(view==c[0]?" on":"")+"' onclick=\"setV('"+c[0]+"')\">"+c[1]+"</div>";});
+  document.getElementById("tools").innerHTML=t;
+  var h="<div class=sec>Channels</div>"+channelCards()+detailRows();
+  h+="<div class=note>Free channels (BookFunnel, StoryOrigin) score on subs gained: Strong 25+ &middot; OK 10-24 &middot; Weak 1-9. BookSweeps scores on cost per confirmed sub: Strong under $0.50 &middot; OK up to $1.00 &middot; Pull back over $1.00 (cancel 10+ days before renewal). Numbers fill in as the daily loops + weekly BookSweeps harvest record shares and signups.</div>";
+  document.getElementById("body").innerHTML=h;
+}
+function setV(v){view=v;render()}
+load();
+</script></body></html>

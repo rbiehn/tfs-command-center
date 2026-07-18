@@ -3,7 +3,10 @@
 ============================================================
 EXOUSIA | TFS - Command Center (home / phone hub)
 rbiehn.github.io/tfs-command-center
-Version 1.1 | July 15, 2026
+Version 1.2 | July 16, 2026
+============================================================
+  v1.2: add Promo ROI tile (promo-roi.html) - subs gained per
+  channel across BookFunnel, StoryOrigin, BookSweeps.
 ============================================================
 -->
 <html lang="en"><head>
@@ -28,6 +31,7 @@ h1 span{color:var(--accent)}
 .tile.pub{border-color:#f9731655}.tile.pub .ic{color:#f97316}
 .tile.mt{border-color:#4a90d955}.tile.mt .ic{color:var(--blue)}
 .tile.bf{border-color:#3fb27f55}.tile.bf .ic{color:var(--green)}
+.tile.roi{border-color:#c9a94a55}.tile.roi .ic{color:var(--accent)}
 .soon{opacity:.5;pointer-events:none}
 .foot{color:var(--dim);font-size:11px;text-align:center;margin-top:26px}
 </style>
@@ -39,7 +43,7 @@ h1 span{color:var(--accent)}
 <div class="grid">
 <a class="tile td" href="./today.html">
 <div class="ic"><i class="fa-solid fa-sun"></i></div>
-<div><div class="nm">Today</div><div class="meta">Sends + shares due</div></div>
+<div><div class="nm">Today</div><div class="meta">Priorities + deadlines</div></div>
 </a>
 <a class="tile pub" href="https://rbiehn.github.io/tfs-publish/">
 <div class="ic"><i class="fa-solid fa-paper-plane"></i></div>
@@ -52,6 +56,10 @@ h1 span{color:var(--accent)}
 <a class="tile bf" href="./bookfunnel.html">
 <div class="ic"><i class="fa-solid fa-book-open"></i></div>
 <div><div class="nm">BookFunnel</div><div class="meta" id="bfCount">Promos</div></div>
+</a>
+<a class="tile roi" href="./promo-roi.html">
+<div class="ic"><i class="fa-solid fa-chart-line"></i></div>
+<div><div class="nm">Promo ROI</div><div class="meta">Subs per channel</div></div>
 </a>
 </div>
 <div class="foot">Robert Biehn &middot; exousia.world &middot; live from Supabase</div>
