@@ -1,0 +1,403 @@
+<!doctype html>
+<!--
+============================================================
+  THE FIRST STONE | Sphere (TFS Command Center)
+  rbiehn.github.io/tfs-command-center/sphere.html
+  Version 1.0 | August 04, 2026
+  ------------------------------------------------------------
+  Find a person, get their link, work the queues. Phone first.
+
+  Talks to the sphere-api Supabase Edge Function, which reads
+  with the service role behind a secret. tracker_sphere keeps
+  RLS on with zero policies, so no name is ever readable from
+  a public URL without the secret.
+
+  The secret is typed once and kept in localStorage on this
+  device. It is NEVER put in the URL, so the address is safe
+  to bookmark, share or screenshot.
+
+  Copy Link copies. It never opens a per-person link, because
+  opening exousia.world/s/<id> records a page view carrying
+  that person's tag: a click on a real human.
+
+  Every failure is shown on screen with its HTTP code. The
+  Cowork board this replaces failed silently and looked dead,
+  which cost most of 2026-08-04.
+============================================================
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Sphere</title>
+<style>
+  :root{
+    color-scheme: light;
+    --ink:#14161a; --dim:#6b7280; --line:#e5e7eb; --bg:#ffffff; --card:#fbfbfc;
+    --gold:#b8860b; --gold-bg:#fdf6e3;
+    --go:#0f7b4f; --go-bg:#e8f5ee;
+    --warn:#b45309; --warn-bg:#fff7ed;
+    --stop:#b91c1c; --stop-bg:#fef2f2;
+    --blue:#1d4ed8; --blue-bg:#eff6ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:12px;background:var(--bg);color:var(--ink);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-text-size-adjust:100%}
+  h1{font-size:17px;margin:0}
+  .hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .sub{font-size:12px;color:var(--dim);margin:2px 0 10px}
+  .lock{font-size:12px;color:var(--dim);background:none;border:0;text-decoration:underline;cursor:pointer;padding:4px}
+
+  .score{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+  .score .box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 10px}
+  .score .n{font-size:22px;font-weight:700;line-height:1.1}
+  .score .l{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em}
+  .score .box.hero{grid-column:1/-1;background:var(--gold-bg);border-color:#eedfae}
+  .score .box.hero .n{color:var(--gold)}
+  .bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:6px}
+  .bar i{display:block;height:100%;background:var(--go);border-radius:99px}
+
+  nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px;
+    border-bottom:1px solid var(--line);-webkit-overflow-scrolling:touch}
+  nav button{flex:0 0 auto;background:var(--card);border:1px solid var(--line);border-radius:99px;
+    padding:7px 12px;font-size:13px;font-weight:600;color:var(--dim);cursor:pointer;min-height:36px}
+  nav button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  nav button .c{display:inline-block;margin-left:5px;font-size:11px;opacity:.75}
+  nav button .c.bad{color:#fca5a5}
+
+  .card{border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:9px;background:var(--card)}
+  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .nm{font-weight:700;font-size:15px}
+  .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;white-space:nowrap;
+    background:var(--blue-bg);color:var(--blue)}
+  .tag.t1{background:var(--gold-bg);color:var(--gold)}
+  .tag.id{background:#f3f4f6;color:var(--dim)}
+  .tag.go{background:var(--go-bg);color:var(--go)}
+  .tag.stop{background:var(--stop-bg);color:var(--stop)}
+  .note{font-size:13px;color:var(--dim);margin-top:5px}
+  .lnk{font-size:12px;color:var(--dim);margin-top:6px;word-break:break-all}
+  .hook{font-size:13px;margin-top:6px;padding:7px 9px;background:#fff;border-left:3px solid var(--gold);border-radius:0 6px 6px 0}
+  .hook.miss{border-left-color:var(--stop);color:var(--stop);font-weight:600}
+
+  .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .acts button,.acts a{flex:1 1 auto;min-width:88px;min-height:44px;border-radius:9px;border:1px solid var(--line);
+    background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink);
+    display:inline-flex;align-items:center;justify-content:center;text-decoration:none;padding:0 10px}
+  .acts button:active{transform:scale(.97)}
+  .b-go{background:var(--go-bg);border-color:#bfe3d0;color:var(--go)}
+  .b-blue{background:var(--blue-bg);border-color:#c7dbff;color:var(--blue)}
+
+  .empty{text-align:center;color:var(--dim);font-size:13px;padding:26px 10px;
+    border:1px dashed var(--line);border-radius:12px}
+  .lead{text-align:left;border-style:solid;padding:11px 12px;margin-bottom:10px}
+  .banner{padding:9px 11px;border-radius:9px;font-size:13px;margin-bottom:10px;font-weight:600}
+  .banner.stop{background:var(--stop-bg);color:var(--stop);border:1px solid #f6c9c9}
+  .banner.rest{background:var(--blue-bg);color:var(--blue);border:1px solid #c7dbff}
+  .banner.warn{background:var(--warn-bg);color:var(--warn);border:1px solid #fbd9a5}
+  .fail{background:var(--stop-bg);color:var(--stop);border:1px solid #f6c9c9;
+    border-radius:10px;padding:10px 11px;font-size:13px;margin-bottom:9px}
+  .fail b{display:block;margin-bottom:3px}
+  .toast{position:fixed;left:12px;right:12px;bottom:12px;background:var(--ink);color:#fff;
+    padding:11px 13px;border-radius:10px;font-size:13px;z-index:99;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+  .hide{display:none}
+  input{width:100%;box-sizing:border-box;font:16px/1.5 inherit;min-height:46px;
+    padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+  .gate{max-width:420px;margin:40px auto}
+  .gate p{font-size:13px;color:var(--dim)}
+  .gate button{width:100%;min-height:46px;margin-top:8px;border-radius:9px;border:1px solid #bfe3d0;
+    background:var(--go-bg);color:var(--go);font-size:15px;font-weight:700;cursor:pointer}
+  @media(min-width:640px){ .score{grid-template-columns:repeat(4,1fr)} .score .box.hero{grid-column:span 2} }
+</style>
+
+<div id="app"></div>
+<div id="toast" class="toast hide"></div>
+
+<script>
+const API = "https://gewufsselhrzbzrctruo.supabase.co/functions/v1/sphere-api";
+const KEY = "tfs_sphere_secret";
+
+const esc = s => String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+let SECRET = "";
+try { SECRET = localStorage.getItem(KEY) || ""; } catch(e){ SECRET = ""; }
+
+let TAB = "find";
+let SCORE = {}, Q = {}, QFAIL = {}, BOOTERR = null;
+let FINDQ = "", FINDR = [], FINDERR = null, FINDBUSY = false, FINDT = null;
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.remove("hide");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.add("hide"), 2600);
+}
+
+// Every failure comes back with its HTTP code and the server's own detail.
+// Nothing here is allowed to fail into a blank screen.
+async function api(action, extra){
+  let res;
+  try {
+    res = await fetch(API, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-secret": SECRET },
+      body: JSON.stringify(Object.assign({ action }, extra || {}))
+    });
+  } catch(e){
+    throw new Error("Could not reach the server. Check your connection. (" + (e.message||"network error") + ")");
+  }
+  let data = null;
+  try { data = await res.json(); } catch(e){ data = null; }
+  if (res.status === 401) throw new Error("401 unauthorized. The secret on this device is wrong. Tap Lock and enter it again.");
+  if (res.status === 503) throw new Error("503 " + ((data&&data.detail) || "the server has no secret configured yet."));
+  if (!res.ok) throw new Error(res.status + " " + ((data&&(data.detail||data.error)) || "request failed"));
+  return data;
+}
+
+/* ---------- unlock ---------- */
+function viewGate(msg){
+  return `<div class="gate">
+    <h1>Sphere</h1>
+    <p>Enter your sphere secret. It stays on this device and is never put in the address, so this page is safe to bookmark.</p>
+    ${msg ? `<div class="fail">${esc(msg)}</div>` : ""}
+    <input id="pw" type="password" autocomplete="current-password" placeholder="secret"
+      onkeydown="if(event.key==='Enter')unlock()">
+    <button onclick="unlock()">Unlock</button>
+  </div>`;
+}
+async function unlock(){
+  const v = (document.getElementById("pw").value || "").trim();
+  if (!v) return;
+  SECRET = v;
+  try {
+    await api("config");
+    try { localStorage.setItem(KEY, SECRET); } catch(e){}
+    boot();
+  } catch(e){
+    SECRET = "";
+    document.getElementById("app").innerHTML = viewGate(e.message);
+  }
+}
+function lock(){
+  SECRET = "";
+  try { localStorage.removeItem(KEY); } catch(e){}
+  document.getElementById("app").innerHTML = viewGate("");
+}
+
+/* ---------- boot ---------- */
+async function boot(){
+  BOOTERR = null;
+  render();
+  const [s, q] = await Promise.allSettled([api("scoreboard"), api("queues")]);
+  if (s.status === "fulfilled") SCORE = s.value.scoreboard || {};
+  else BOOTERR = s.reason.message;
+  if (q.status === "fulfilled"){ Q = q.value.queues || {}; QFAIL = q.value.failed || {}; }
+  else BOOTERR = BOOTERR || q.reason.message;
+  render();
+}
+
+const rows = k => (Q[k] || []);
+
+function render(){
+  if (!SECRET){ document.getElementById("app").innerHTML = viewGate(""); return; }
+
+  const s = SCORE;
+  const sent = +s.sent_today || 0, quota = +s.quota_today || 0;
+  const books = +s.books || 0, goal = +s.claims_goal || 100;
+
+  let banner = "";
+  if (BOOTERR) banner += `<div class="banner stop">${esc(BOOTERR)}</div>`;
+  else if (quota === 0){
+    banner += (new Date().getDay() === 0)
+      ? '<div class="banner rest">Sunday. Quota is 0 by design and zero is the correct result, never a miss.</div>'
+      : '<div class="banner stop">Quota is 0. The ramp is PAUSED. Do not send today.</div>';
+  }
+  const badKeys = Object.keys(QFAIL || {});
+  if (badKeys.length) banner += `<div class="banner warn">${badKeys.length} panel${badKeys.length===1?"":"s"} failed to load: ${esc(badKeys.join(", "))}. The rest is live.</div>`;
+
+  const score = BOOTERR ? "" : `
+    <div class="box hero">
+      <div class="n">${books} <span style="font-size:14px;color:var(--dim)">/ ${goal}</span></div>
+      <div class="l">books pre-ordered &middot; ${+s.claims||0} buyer${(+s.claims||0)===1?"":"s"}, ${+s.claims_verified||0} verified</div>
+      <div class="bar"><i style="width:${Math.min(100, goal? books/goal*100:0)}%"></i></div>
+    </div>
+    <div class="box"><div class="n">${sent}<span style="font-size:14px;color:var(--dim)">/${quota}</span></div><div class="l">sent today</div></div>
+    <div class="box"><div class="n">${+s.replied||0}</div><div class="l">replied</div></div>
+    <div class="box"><div class="n">${+s.links_given||0}</div><div class="l">links given</div></div>
+    <div class="box"><div class="n">${+s.went_to_retailer||0}</div><div class="l">went to B&amp;N</div></div>
+    <div class="box"><div class="n">${(+s.sent_all_time||0).toLocaleString()}</div><div class="l">sent all time</div></div>`;
+
+  const c = k => QFAIL[k] ? '<span class="c bad">!</span>' : '<span class="c">'+rows(k).length+'</span>';
+  const tabs = [
+    ["find","Find a person",""],
+    ["click_no_send","Did you send this?",c("click_no_send")],
+    ["ready_for_link","Drop the link",c("ready_for_link")],
+    ["owes_reply","They're waiting on me",c("owes_reply")],
+    ["went_to_retailer","Went to B&amp;N",c("went_to_retailer")],
+    ["today","Today's batch",c("today")],
+    ["no_reply","No reply",c("no_reply")],
+    ["hook_gap","Need a hook",c("hook_gap")]
+  ];
+
+  document.getElementById("app").innerHTML = `
+    <div class="hd"><h1>Sphere</h1><button class="lock" onclick="lock()">Lock</button></div>
+    <div class="sub">${new Date().toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})}
+      &middot; ${(+s.total_sphere||0).toLocaleString()} in the sphere</div>
+    ${banner}
+    <div class="score">${score}</div>
+    <nav>${tabs.map(([k,l,cc])=>`<button class="${TAB===k?"on":""}" onclick="setTab('${k}')">${l}${cc}</button>`).join("")}</nav>
+    <div id="list">${body()}</div>`;
+
+  if (TAB === "find"){
+    const el = document.getElementById("findq");
+    if (el){ el.value = FINDQ; paintFind(); }
+  }
+}
+function setTab(t){
+  TAB = t; render();
+  if (t === "find"){ const el = document.getElementById("findq"); if (el) el.focus(); }
+}
+
+function body(){
+  if (TAB === "find") return viewFind();
+  if (QFAIL[TAB]) return `<div class="fail"><b>This panel did not load.</b>${esc(QFAIL[TAB])}</div>`;
+  const r = rows(TAB);
+  if (TAB === "click_no_send") return r.length ? r.map(cardAsk).join("")
+    : `<div class="empty">Nothing ambiguous. Every recorded click has a send behind it.</div>`;
+  if (TAB === "ready_for_link") return r.length
+    ? `<div class="empty lead">These people replied to your video and have not opened a link yet. Now the link is an answer in a conversation, not an ad stapled to a video.</div>` + r.map(cardLink).join("")
+    : `<div class="empty">Nobody waiting for a link.</div>`;
+  if (TAB === "owes_reply") return r.length ? r.map(cardOwes).join("")
+    : `<div class="empty">Inbox clear. Nobody is waiting on you.</div>`;
+  if (TAB === "went_to_retailer") return r.length
+    ? `<div class="empty lead">These people went through to Barnes &amp; Noble and no claim has come back. Closest anyone gets to a sale without one being counted.</div>` + r.map(cardBn).join("")
+    : `<div class="empty">Nobody sitting at the retailer unclaimed.</div>`;
+  if (TAB === "today") return r.length ? r.map(cardToday).join("")
+    : `<div class="empty">No batch for today. This page is search-first: use <b>Find a person</b>.</div>`;
+  if (TAB === "no_reply") return r.length ? r.map(cardNudge).join("")
+    : `<div class="empty">Nothing due for a nudge.</div>`;
+  if (TAB === "hook_gap") return r.length
+    ? `<div class="empty lead">These tier-1 people are held out of any batch until you give one personal line. Nothing else can write it: it is your memory of them. Tell me the line in chat and I'll save it.</div>` + r.map(cardHook).join("")
+    : `<div class="empty">Every tier-1 person has an opener.</div>`;
+  return "";
+}
+
+const fb = r => r.fb_profile_url ||
+  ("https://www.facebook.com/search/people/?q=" + encodeURIComponent(r.name || ""));
+const tier = t => `<span class="tag ${t===1?"t1":""}">tier ${t==null?"?":t}</span>`;
+const openChat = r => `<a href="${esc(fb(r))}" target="_blank" rel="noopener">Open chat</a>`;
+const copyBtn = id => `<button class="b-go" onclick="copyLink(${id})">Copy link</button>`;
+const lastNote = n => n ? `<div class="note">${esc(String(n).split("\n").slice(-1)[0])}</div>` : "";
+
+function cardAsk(r){ return `<div class="card">
+  <div class="top"><div class="nm">${esc(r.name)}</div>
+    ${r.bn_clicked_at?'<span class="tag go">went to B&amp;N</span>':tier(r.tier)}</div>
+  <div class="note">${esc(r.question)}</div>
+  <div class="acts">${openChat(r)}${copyBtn(r.id)}</div></div>`; }
+
+function cardLink(r){
+  const h = +r.hours_since_reply||0, age = h<24 ? h+"h ago" : Math.round(h/24)+"d ago";
+  return `<div class="card">
+    <div class="top"><div class="nm">${esc(r.name)}</div><span class="tag t1">replied ${age}</span></div>
+    ${r.response_type?`<div class="note">${esc(r.response_type)}</div>`:""}${lastNote(r.notes)}
+    <div class="acts">${openChat(r)}${copyBtn(r.id)}</div></div>`; }
+
+function cardOwes(r){
+  const h = +r.hours_waiting||0, age = h<24 ? h+"h" : Math.round(h/24)+"d";
+  return `<div class="card">
+    <div class="top"><div class="nm">${esc(r.name)}</div>
+      <span class="tag ${h>48?"stop":"t1"}">${age} waiting</span></div>
+    ${r.response_type?`<div class="note">${esc(r.response_type)}</div>`:""}${lastNote(r.notes)}
+    <div class="acts">${openChat(r)}${copyBtn(r.id)}</div></div>`; }
+
+function cardBn(r){ return `<div class="card">
+  <div class="top"><div class="nm">${esc(r.name)}</div>
+    <span class="tag go">${r.days_since==null?"":r.days_since+"d ago"}</span></div>
+  ${r.relationship_notes?`<div class="note">${esc(r.relationship_notes)}</div>`:""}
+  ${r.confidence?`<div class="note">confidence: ${esc(r.confidence)}${r.click_unverified?" · no send logged, this click may be you":""}</div>`:""}
+  <div class="acts">${openChat(r)}${copyBtn(r.id)}</div></div>`; }
+
+function cardToday(r){
+  const hook = r.personal_hook ? `<div class="hook">${esc(r.personal_hook)}</div>`
+    : (r.tier===1 ? `<div class="hook miss">No opener yet. Tier 1 never goes out generic.</div>` : "");
+  return `<div class="card">
+    <div class="top"><div class="nm">${esc(r.name)}</div>${tier(r.tier)}</div>
+    ${r.relationship_notes?`<div class="note">${esc(r.relationship_notes)}</div>`:""}${hook}
+    <div class="acts">${openChat(r)}${copyBtn(r.id)}</div></div>`; }
+
+function cardNudge(r){ return `<div class="card">
+  <div class="top"><div class="nm">${esc(r.name)}</div>${tier(r.tier)}</div>
+  <div class="note">${r.days_since_sent} days since the video${
+    r.bn_clicked_at ? " · <b>went to Barnes &amp; Noble</b>" :
+    r.clicked_at ? " · <b>opened the page and said nothing</b>" : ""}</div>
+  <div class="acts">${openChat(r)}${copyBtn(r.id)}</div></div>`; }
+
+function cardHook(r){ return `<div class="card">
+  <div class="top"><div class="nm">${esc(r.name)}</div><span class="tag t1">tier 1</span></div>
+  ${r.relationship_notes?`<div class="note">${esc(r.relationship_notes)}</div>`:""}
+  <div class="acts">${openChat(r)}</div></div>`; }
+
+/* ---------- find a person ---------- */
+function viewFind(){
+  return `<div class="card" style="margin-bottom:10px">
+      <input id="findq" type="search" autocomplete="off" placeholder="Type a name…" oninput="onFind(this.value)">
+      <div class="note" id="find-count">Type at least two letters.</div>
+    </div>
+    <div id="find-out"></div>`;
+}
+function onFind(v){
+  FINDQ = v; clearTimeout(FINDT);
+  const term = v.trim();
+  if (term.length < 2){ FINDR = []; FINDERR = null; FINDBUSY = false; paintFind(); return; }
+  FINDT = setTimeout(()=>runFind(term), 250);
+}
+async function runFind(term){
+  FINDBUSY = true; FINDERR = null; paintFind();
+  try {
+    const d = await api("search", { q: term });
+    if (FINDQ.trim() !== term) return;   // a newer keystroke already won
+    FINDR = d.rows || [];
+  } catch(e){
+    if (FINDQ.trim() !== term) return;
+    FINDR = []; FINDERR = e.message;
+  }
+  FINDBUSY = false; paintFind();
+}
+function paintFind(){
+  const out = document.getElementById("find-out"), cnt = document.getElementById("find-count");
+  if (!out || !cnt) return;
+  const term = FINDQ.trim();
+  if (FINDERR){ cnt.textContent = ""; out.innerHTML = `<div class="fail"><b>Search failed.</b>${esc(FINDERR)}</div>`; return; }
+  if (term.length < 2){ cnt.textContent = "Type at least two letters."; out.innerHTML = ""; return; }
+  if (FINDBUSY){ cnt.textContent = "searching…"; return; }
+  cnt.textContent = FINDR.length === 50 ? "first 50 matches, keep typing to narrow it"
+    : FINDR.length + " match" + (FINDR.length===1?"":"es");
+  out.innerHTML = FINDR.length ? FINDR.map(r=>{
+    const marks = [
+      r.video_sent ? "video sent" : null,
+      r.link_given ? "link given" : null,
+      r.replied ? "replied" : null,
+      r.went_bn ? "went to B&amp;N" : (r.clicked ? "clicked" : null),
+      r.books ? "<b>"+r.books+" book"+(r.books>1?"s":"")+"</b>" : null,
+      r.arc_candidate ? "ARC" : null,
+      r.status === "suppressed" ? "suppressed" : null
+    ].filter(Boolean).join(" · ");
+    return `<div class="card">
+      <div class="top"><div class="nm">${esc(r.name)}</div><span class="tag id">#${r.id}</span></div>
+      <div class="lnk">${esc(r.link)}</div>
+      ${marks?`<div class="note">${marks}</div>`:""}
+      <div class="acts">${copyBtn(r.id)}${openChat(r)}</div></div>`;
+  }).join("") : `<div class="empty">Nobody matches that.</div>`;
+}
+
+/* ---------- copy, never open ---------- */
+async function copyLink(id){
+  let link;
+  try { link = (await api("link", { id })).link; }
+  catch(e){ return toast(e.message); }
+  if (!link) return toast("could not build the link");
+  try { await navigator.clipboard.writeText(link); toast("link copied"); }
+  catch(e){ window.prompt("Copy this link", link); }
+}
+
+if (SECRET) boot(); else render();
+</script>
