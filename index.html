@@ -3,10 +3,15 @@
 ============================================================
 EXOUSIA | TFS - Command Center (home / phone hub)
 rbiehn.github.io/tfs-command-center
-Version 1.2 | July 16, 2026
-============================================================
-  v1.2: add Promo ROI tile (promo-roi.html) - subs gained per
-  channel across BookFunnel, StoryOrigin, BookSweeps.
+Version 1.2 | August 04, 2026
+------------------------------------------------------------
+v1.2 adds the SPHERE tile, placed first because it is the one
+module with a hard deadline: 100 pre-ordered books by
+2026-09-03. It has no live count on purpose. tracker_sphere
+has RLS on with ZERO policies, so the publishable key used
+below cannot read it, and that is exactly what keeps 4,574
+real people's names off a public URL. sphere.html gets its
+data from the sphere-api edge function behind a secret.
 ============================================================
 -->
 <html lang="en"><head>
@@ -27,11 +32,11 @@ h1 span{color:var(--accent)}
 .tile .ic{font-size:26px}
 .tile .nm{font-weight:700;font-size:16px;margin-top:10px}
 .tile .meta{color:var(--dim);font-size:12px;margin-top:3px;min-height:15px}
+.tile.sp{border-color:#c9a94a77;grid-column:1/-1;min-height:110px}.tile.sp .ic{color:var(--accent)}
 .tile.td{border-color:#a988ff55}.tile.td .ic{color:var(--purple)}
 .tile.pub{border-color:#f9731655}.tile.pub .ic{color:#f97316}
 .tile.mt{border-color:#4a90d955}.tile.mt .ic{color:var(--blue)}
 .tile.bf{border-color:#3fb27f55}.tile.bf .ic{color:var(--green)}
-.tile.roi{border-color:#c9a94a55}.tile.roi .ic{color:var(--accent)}
 .soon{opacity:.5;pointer-events:none}
 .foot{color:var(--dim);font-size:11px;text-align:center;margin-top:26px}
 </style>
@@ -41,6 +46,10 @@ h1 span{color:var(--accent)}
 <h1><span>TFS</span> - Command Center</h1>
 <p class="sub">The First Stone / World of Exousia. Tap a module.</p>
 <div class="grid">
+<a class="tile sp" href="./sphere.html">
+<div class="ic"><i class="fa-solid fa-users"></i></div>
+<div><div class="nm">Sphere</div><div class="meta">Find a person, get their link</div></div>
+</a>
 <a class="tile td" href="./today.html">
 <div class="ic"><i class="fa-solid fa-sun"></i></div>
 <div><div class="nm">Today</div><div class="meta">Priorities + deadlines</div></div>
@@ -56,10 +65,6 @@ h1 span{color:var(--accent)}
 <a class="tile bf" href="./bookfunnel.html">
 <div class="ic"><i class="fa-solid fa-book-open"></i></div>
 <div><div class="nm">BookFunnel</div><div class="meta" id="bfCount">Promos</div></div>
-</a>
-<a class="tile roi" href="./promo-roi.html">
-<div class="ic"><i class="fa-solid fa-chart-line"></i></div>
-<div><div class="nm">Promo ROI</div><div class="meta">Subs per channel</div></div>
 </a>
 </div>
 <div class="foot">Robert Biehn &middot; exousia.world &middot; live from Supabase</div>
