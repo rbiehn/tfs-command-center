@@ -1,0 +1,371 @@
+<!doctype html>
+<!--
+============================================================
+  TFS COMMAND CENTER | Newsletter (write the issue here)
+  rbiehn.github.io/tfs-command-center/newsletter.html
+  Version 1.0 | August 07, 2026
+  ========================================================
+  WHY THIS EXISTS: on 2026-08-07 the 1:15 PM stage run found no
+  draft and no-opped, because Robert was writing in a Google Doc
+  and the automation only looks at public.newsletters, the Drop
+  Zone and this command center. The whole issue had to be rebuilt
+  by hand hours later. Writing here puts the issue exactly where
+  every downstream job already looks.
+
+  BACKEND (already existed, upgraded to v2.0 on 2026-08-07):
+    read  POST /functions/v1/get-newsletters  { op:'next', password }
+    write POST /functions/v1/set-newsletter   { issue_date, password, ...fields }
+  NO KEY IS EMBEDDED IN THIS FILE. The password is typed by Robert,
+  kept in localStorage under tfs_tracker_pass (the shared command
+  center login), and compared timing-safe server side against
+  TRACKER_PASSWORD. Do not ever paste a Supabase key in here.
+
+  WHAT FEEDS WHAT:
+    Kit email      subject, preview_text, body_md, thumbnail_alt,
+                   kit_description, audience_tag
+    Author Journal skin, banner_url (R2), soundtrack_url, seo_title,
+                   seo_description, excerpt, categories, tags
+    Discord        subject, preview_text, blog_slug, pov_character
+  banner_url is the R2 ORIGINAL and is what you fill in.
+  banner_squarespace_url is written back by the blog step later; it
+  cannot exist until the Featured Image is uploaded.
+============================================================
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TFS - Newsletter</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#0f1117;color:#e8eaf0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+  .wrap{max-width:640px;margin:0 auto;padding:18px 14px 64px}
+  a{color:#4a90d9}
+  h1{font-size:22px;letter-spacing:.14em;text-transform:uppercase;color:#c9a94a;margin:0 0 4px}
+  .sub{color:#9aa0b4;font-size:13px;margin:0 0 18px}
+  .topbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap}
+  .btn{background:#1a1d27;border:1px solid #2c3142;color:#e8eaf0;border-radius:10px;
+    padding:10px 14px;font-size:14px;cursor:pointer;min-height:44px}
+  .btn:active{transform:translateY(1px)}
+  .btn.gold{border-color:#c9a94a77;color:#c9a94a}
+  .card{background:#1a1d27;border:1px solid #c9a94a77;border-radius:18px;padding:16px;margin:0 0 14px}
+  .card.plain{border-color:#2c3142}
+  label{display:block;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+    color:#9aa0b4;margin:0 0 6px}
+  input[type=text],input[type=date],textarea,select{
+    width:100%;background:#0f1117;border:1px solid #2c3142;color:#e8eaf0;
+    border-radius:10px;padding:12px;font-size:16px;font-family:inherit;line-height:1.5}
+  textarea{resize:vertical;min-height:120px}
+  #body_md{min-height:340px}
+  .field{margin:0 0 14px}
+  .count{float:right;font-size:11px;color:#9aa0b4;letter-spacing:.06em}
+  .count.warn{color:#f97316}
+  .count.bad{color:#FF2A5E}
+  .hint{font-size:12px;color:#9aa0b4;margin:6px 0 0}
+  .status{font-size:12px;color:#9aa0b4;min-height:18px}
+  .status.saving{color:#c9a94a}
+  .status.saved{color:#3fb27f}
+  .status.err{color:#FF2A5E}
+  .pill{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    border:1px solid #2c3142;border-radius:999px;padding:4px 10px;color:#9aa0b4;margin:0 6px 6px 0}
+  .pill.on{border-color:#3fb27f55;color:#3fb27f}
+  details{margin:0 0 14px}
+  summary{cursor:pointer;color:#c9a94a;font-size:13px;letter-spacing:.1em;
+    text-transform:uppercase;padding:12px 0;min-height:44px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row .field{flex:1 1 46%;min-width:150px}
+  .gate{max-width:360px;margin:16vh auto;padding:0 16px;text-align:center}
+  .hide{display:none}
+  .ro{font-size:12px;color:#9aa0b4;word-break:break-all;margin:0 0 8px}
+  .ro b{color:#e8eaf0;font-weight:600}
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <h1>TFS Newsletter</h1>
+  <p class="sub">Enter your command center password</p>
+  <div class="field"><input type="password" id="pw" autocomplete="current-password"
+    style="width:100%;background:#0f1117;border:1px solid #2c3142;color:#e8eaf0;border-radius:10px;padding:12px;font-size:16px"></div>
+  <button class="btn gold" id="unlock" style="width:100%">Unlock</button>
+  <p class="status err" id="gateMsg"></p>
+</div>
+
+<div id="app" class="wrap hide">
+  <div class="topbar">
+    <div>
+      <h1>Newsletter</h1>
+      <p class="sub" id="issueLine">Loading...</p>
+    </div>
+    <div>
+      <a class="btn" href="index.html">Command Center</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="field">
+      <label>Subject <span class="count" id="c_subject"></span></label>
+      <input type="text" id="subject" placeholder="A tiny scene. A quote, an understatement, a contradiction.">
+      <p class="hint">Your best openers are scenes, not summaries. Do not repeat it inside the email body.</p>
+    </div>
+
+    <div class="field">
+      <label>Preview text <span class="count" id="c_preview_text"></span></label>
+      <input type="text" id="preview_text" placeholder="A dare or a self own, plus the ask stated plainly.">
+      <p class="hint">iOS clips around 45 characters. Front load the payload.</p>
+    </div>
+
+    <div class="field" style="margin-bottom:0">
+      <label>Body <span class="count" id="c_body_md"></span></label>
+      <textarea id="body_md" placeholder="Write the issue. Markdown: **bold** for spoken lines, *italic* for inner thoughts, - for bullets."></textarea>
+      <p class="hint">Markdown. The Friday stage run turns this into the Kit HTML and the Author Journal card.</p>
+    </div>
+  </div>
+
+  <div class="status" id="saveStatus"></div>
+
+  <details>
+    <summary>Issue details (Kit, Author Journal, Discord)</summary>
+    <div class="card plain">
+      <div class="field">
+        <label>Banner, R2 link</label>
+        <input type="text" id="banner_url" placeholder="https://pub-ee2353b4d7c24e2daa68ae0ce076f9a4.r2.dev/Blog%20Pages/&lt;issue&gt;/&lt;file&gt;.png">
+        <p class="hint">The R2 original. Feeds the Discord embed and the Kit thumbnail upload. The Squarespace copy gets written back automatically after the blog Featured Image is set.</p>
+      </div>
+
+      <div class="field">
+        <label>Thumbnail alt text <span class="count" id="c_thumbnail_alt"></span></label>
+        <input type="text" id="thumbnail_alt" placeholder="Lead with the words on the image, then the scene, then for The First Stone newsletter.">
+      </div>
+
+      <div class="field">
+        <label>Kit internal description <span class="count" id="c_kit_description"></span></label>
+        <input type="text" id="kit_description" placeholder="One short line. Only you see this.">
+        <p class="hint">Hard cap near 150. Kit rejects the save past that with a generic error.</p>
+      </div>
+
+      <div class="field">
+        <label>POV character (Discord)</label>
+        <input type="text" id="pov_character" placeholder="Rowan, Yenna, Cass... or leave empty">
+        <p class="hint">Fill this only on a character POV issue with the Ask mechanic. Filled means Discord includes the ask line naming them. Empty means it omits the line.</p>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Skin</label>
+          <select id="skin">
+            <option value="light_essay">Light essay (author voice)</option>
+            <option value="dark_fiction">Dark fiction (in world POV)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Audience</label>
+          <input type="text" id="audience_tag" placeholder="OV-Vetted-Subscriber">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>SEO title <span class="count" id="c_seo_title"></span></label>
+        <input type="text" id="seo_title" placeholder="Keyword rich, 60 characters or under.">
+      </div>
+
+      <div class="field">
+        <label>SEO description <span class="count" id="c_seo_description"></span></label>
+        <input type="text" id="seo_description" placeholder="Front load The First Stone plus the topic, end on the hook.">
+      </div>
+
+      <div class="field">
+        <label>Excerpt <span class="count" id="c_excerpt"></span></label>
+        <input type="text" id="excerpt" placeholder="The curiosity hook. Often the preview text.">
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Categories</label>
+          <input type="text" id="categories" placeholder="Behind the Scenes, Worldbuilding">
+        </div>
+        <div class="field">
+          <label>Tags</label>
+          <input type="text" id="tags" placeholder="The First Stone, Exousia, Cass">
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:0">
+        <label>Blog slug</label>
+        <input type="text" id="blog_slug" placeholder="auto from the subject if left empty">
+        <p class="hint">Lets the Discord post be built without waiting on Kit.</p>
+      </div>
+    </div>
+  </details>
+
+  <div class="card plain">
+    <div id="pills"></div>
+    <div id="readonly"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn gold" id="saveNow" style="flex:1 1 auto">Save now</button>
+      <button class="btn" id="reload" style="flex:0 0 auto">Reload</button>
+    </div>
+    <p class="hint" id="dateSwitch"></p>
+  </div>
+</div>
+
+<script>
+(function(){
+  var BASE = 'https://gewufsselhrzbzrctruo.supabase.co/functions/v1/';
+  var GET = BASE + 'get-newsletters';
+  var SET = BASE + 'set-newsletter';
+  var PW_KEY = 'tfs_tracker_pass';
+
+  var TEXT = ['subject','preview_text','body_md','banner_url','thumbnail_alt',
+              'kit_description','pov_character','audience_tag','seo_title',
+              'seo_description','excerpt','blog_slug'];
+  var LIMITS = {subject:60, preview_text:45, kit_description:150, thumbnail_alt:150,
+                seo_title:60, seo_description:150, excerpt:150};
+
+  var issueDate = null, loaded = null, timer = null, dirty = false;
+
+  function $(id){ return document.getElementById(id); }
+  function pw(){ return localStorage.getItem(PW_KEY) || ''; }
+
+  function post(url, payload){
+    payload = payload || {};
+    payload.password = pw();
+    return fetch(url, {method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify(payload)}).then(function(r){
+        return r.json().then(function(j){ return {status:r.status, json:j}; });
+      });
+  }
+
+  function setStatus(msg, cls){
+    var el = $('saveStatus');
+    el.textContent = msg;
+    el.className = 'status' + (cls ? ' ' + cls : '');
+  }
+
+  function counter(id){
+    var el = $(id), out = $('c_' + id);
+    if(!el || !out) return;
+    var n = (el.value || '').length, lim = LIMITS[id];
+    out.textContent = lim ? (n + ' / ' + lim) : (n + '');
+    out.className = 'count' + (lim && n > lim ? ' bad' : (lim && n > lim - 10 ? ' warn' : ''));
+  }
+
+  function collect(){
+    var out = { issue_date: issueDate };
+    TEXT.forEach(function(k){ var el = $(k); if(el) out[k] = el.value.trim() || null; });
+    out.skin = $('skin').value;
+    ['categories','tags'].forEach(function(k){
+      var v = $(k).value.trim();
+      out[k] = v ? v.split(',').map(function(s){ return s.trim(); }).filter(Boolean) : [];
+    });
+    return out;
+  }
+
+  function fill(n){
+    loaded = n || {};
+    TEXT.forEach(function(k){ var el = $(k); if(el) el.value = (loaded[k] == null ? '' : loaded[k]); });
+    $('skin').value = loaded.skin || 'light_essay';
+    ['categories','tags'].forEach(function(k){
+      $(k).value = Array.isArray(loaded[k]) ? loaded[k].join(', ') : '';
+    });
+    Object.keys(LIMITS).concat(['body_md']).forEach(counter);
+
+    var pills = [];
+    pills.push('<span class="pill' + (loaded.status === 'sent' ? ' on' : '') + '">' + (loaded.status || 'draft') + '</span>');
+    if(loaded.kit_broadcast_id) pills.push('<span class="pill on">Kit ' + loaded.kit_broadcast_id + '</span>');
+    if(loaded.blog_post_url) pills.push('<span class="pill on">blog live</span>');
+    $('pills').innerHTML = pills.join('');
+
+    var ro = [];
+    if(loaded.kit_broadcast_id) ro.push('<p class="ro"><b>Kit draft:</b> <a href="https://app.kit.com/campaigns/' + loaded.kit_broadcast_id + '/draft">app.kit.com/campaigns/' + loaded.kit_broadcast_id + '/draft</a></p>');
+    if(loaded.blog_post_url) ro.push('<p class="ro"><b>Blog:</b> <a href="' + loaded.blog_post_url + '">' + loaded.blog_post_url + '</a></p>');
+    if(loaded.banner_squarespace_url) ro.push('<p class="ro"><b>Banner (Squarespace, auto):</b> ' + loaded.banner_squarespace_url + '</p>');
+    ro.push('<p class="ro"><b>Soundtrack:</b> ' + (loaded.soundtrack_url || 'skin default (R2)') + '</p>');
+    $('readonly').innerHTML = ro.join('');
+  }
+
+  function save(){
+    if(!issueDate) return;
+    setStatus('Saving...', 'saving');
+    post(SET, collect()).then(function(r){
+      if(r.status === 401){ setStatus('Password rejected. Reload and unlock again.', 'err'); return; }
+      if(r.status !== 200 || !r.json.ok){
+        setStatus('Not saved: ' + (r.json && (r.json.detail || r.json.error) || r.status), 'err'); return;
+      }
+      dirty = false;
+      var d = r.json.dropped_fields || [];
+      setStatus('Saved ' + new Date().toLocaleTimeString() + (d.length ? ' (ignored: ' + d.join(', ') + ')' : ''), 'saved');
+    }).catch(function(e){ setStatus('Not saved: ' + e, 'err'); });
+  }
+
+  function queueSave(){
+    dirty = true;
+    setStatus('Unsaved changes...', 'saving');
+    clearTimeout(timer);
+    timer = setTimeout(save, 1200);
+  }
+
+  function load(date){
+    setStatus('Loading...', 'saving');
+    post(GET, {op:'next', issue_date: date || null}).then(function(r){
+      if(r.status === 401){
+        localStorage.removeItem(PW_KEY);
+        $('app').classList.add('hide'); $('gate').classList.remove('hide');
+        $('gateMsg').textContent = 'Password rejected.';
+        return;
+      }
+      if(!r.json || !r.json.ok){ setStatus('Could not load: ' + (r.json && r.json.error), 'err'); return; }
+      issueDate = r.json.issue_date;
+      $('issueLine').textContent = 'Issue for Friday ' + issueDate + (r.json.created ? ' (new)' : '');
+      $('dateSwitch').innerHTML = 'Writing into <b>' + issueDate + '</b>. Wrong issue? <a href="#" id="pickDate">pick another date</a>';
+      var p = $('pickDate');
+      if(p) p.onclick = function(ev){
+        ev.preventDefault();
+        var d = prompt('Issue date (YYYY-MM-DD)', issueDate);
+        if(d) load(d.trim());
+      };
+      fill(r.json.newsletter);
+      setStatus('Loaded.', 'saved');
+    }).catch(function(e){ setStatus('Could not load: ' + e, 'err'); });
+  }
+
+  TEXT.forEach(function(k){
+    var el = $(k);
+    if(!el) return;
+    el.addEventListener('input', function(){ counter(k); queueSave(); });
+  });
+  ['skin','categories','tags'].forEach(function(k){
+    $(k).addEventListener('input', queueSave);
+    $(k).addEventListener('change', queueSave);
+  });
+
+  $('saveNow').onclick = function(){ clearTimeout(timer); save(); };
+  $('reload').onclick = function(){
+    if(dirty && !confirm('You have unsaved changes. Reload anyway?')) return;
+    load(issueDate);
+  };
+  window.addEventListener('beforeunload', function(e){
+    if(dirty){ e.preventDefault(); e.returnValue = ''; }
+  });
+
+  $('unlock').onclick = function(){
+    var v = $('pw').value.trim();
+    if(!v) return;
+    localStorage.setItem(PW_KEY, v);
+    $('gate').classList.add('hide');
+    $('app').classList.remove('hide');
+    load(null);
+  };
+  $('pw').addEventListener('keydown', function(e){ if(e.key === 'Enter') $('unlock').click(); });
+
+  if(pw()){
+    $('gate').classList.add('hide');
+    $('app').classList.remove('hide');
+    load(null);
+  }
+})();
+</script>
+</body>
+</html>
