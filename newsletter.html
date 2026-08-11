@@ -3,7 +3,7 @@
 ============================================================
   TFS COMMAND CENTER | Newsletter (write the issue here)
   rbiehn.github.io/tfs-command-center/newsletter.html
-  Version 1.0 | August 07, 2026
+  Version 2.0 | August 10, 2026
   ========================================================
   WHY THIS EXISTS: on 2026-08-07 the 1:15 PM stage run found no
   draft and no-opped, because Robert was writing in a Google Doc
@@ -58,7 +58,19 @@
     width:100%;background:#0f1117;border:1px solid #2c3142;color:#e8eaf0;
     border-radius:10px;padding:12px;font-size:16px;font-family:inherit;line-height:1.5}
   textarea{resize:vertical;min-height:120px}
-  #body_md{min-height:340px}
+  .rt{min-height:340px;overflow-y:auto;background:#0f1117;border:1px solid #2c3142;
+    color:#e8eaf0;border-radius:10px;padding:12px;font-size:16px;line-height:1.6}
+  .rt:focus{outline:none;border-color:#c9a94a77}
+  .rt:empty:before{content:attr(data-ph);color:#5d6478}
+  .rt p{margin:0 0 12px}
+  .rt em{font-style:italic}
+  .rt strong{font-weight:700}
+  .rt ol,.rt ul{margin:0 0 12px;padding-left:24px}
+  .rt a{color:#4a90d9}
+  .tb{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+  .tb button{background:#1a1d27;border:1px solid #2c3142;color:#e8eaf0;border-radius:8px;
+    min-width:44px;min-height:40px;font-size:14px;cursor:pointer}
+  .tb button:active{transform:translateY(1px)}
   .field{margin:0 0 14px}
   .count{float:right;font-size:11px;color:#9aa0b4;letter-spacing:.06em}
   .count.warn{color:#f97316}
@@ -118,9 +130,17 @@
     </div>
 
     <div class="field" style="margin-bottom:0">
-      <label>Body <span class="count" id="c_body_md"></span></label>
-      <textarea id="body_md" placeholder="Write the issue. Markdown: **bold** for spoken lines, *italic* for inner thoughts, - for bullets."></textarea>
-      <p class="hint">Markdown. The Friday stage run turns this into the Kit HTML and the Author Journal card.</p>
+      <label>Body <span class="count" id="c_body_html"></span></label>
+      <div class="tb">
+        <button type="button" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button type="button" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+        <button type="button" data-cmd="insertUnorderedList" title="Bullets">&bull;</button>
+        <button type="button" data-cmd="insertOrderedList" title="Numbered">1.</button>
+        <button type="button" data-cmd="createLink" title="Link">Link</button>
+        <button type="button" data-cmd="removeFormat" title="Clear formatting">Clear</button>
+      </div>
+      <div id="body_html" class="rt" contenteditable="true" data-ph="Write the issue. Use the buttons, or Ctrl+B and Ctrl+I. You can also paste straight from a Google Doc and the italics come with it."></div>
+      <p class="hint">Rich text. Paste from a Google Doc and the formatting survives; anything unsafe is stripped.</p>
     </div>
   </div>
 
@@ -218,7 +238,7 @@
   var SET = BASE + 'set-newsletter';
   var PW_KEY = 'tfs_tracker_pass';
 
-  var TEXT = ['subject','preview_text','body_md','banner_url','thumbnail_alt',
+  var TEXT = ['subject','preview_text','banner_url','thumbnail_alt',
               'kit_description','pov_character','audience_tag','seo_title',
               'seo_description','excerpt','blog_slug'];
   var LIMITS = {subject:60, preview_text:45, kit_description:150, thumbnail_alt:150,
@@ -255,6 +275,7 @@
   function collect(){
     var out = { issue_date: issueDate };
     TEXT.forEach(function(k){ var el = $(k); if(el) out[k] = el.value.trim() || null; });
+    out.body_html = ED().innerHTML.trim();
     out.skin = $('skin').value;
     ['categories','tags'].forEach(function(k){
       var v = $(k).value.trim();
@@ -266,11 +287,15 @@
   function fill(n){
     loaded = n || {};
     TEXT.forEach(function(k){ var el = $(k); if(el) el.value = (loaded[k] == null ? '' : loaded[k]); });
+    if(loaded.body_html){ ED().innerHTML = loaded.body_html; }
+    else if(loaded.body_md){ ED().innerHTML = loaded.body_md.split(/\n{2,}/)
+      .map(function(p){ return '<p>' + p.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</p>'; }).join(''); }
+    else { ED().innerHTML = ''; }
     $('skin').value = loaded.skin || 'light_essay';
     ['categories','tags'].forEach(function(k){
       $(k).value = Array.isArray(loaded[k]) ? loaded[k].join(', ') : '';
     });
-    Object.keys(LIMITS).concat(['body_md']).forEach(counter);
+    Object.keys(LIMITS).forEach(counter); bodyCount();
 
     var pills = [];
     pills.push('<span class="pill' + (loaded.status === 'sent' ? ' on' : '') + '">' + (loaded.status || 'draft') + '</span>');
@@ -330,6 +355,67 @@
       setStatus('Loaded.', 'saved');
     }).catch(function(e){ setStatus('Could not load: ' + e, 'err'); });
   }
+
+  function ED(){ return $('body_html'); }
+  function bodyCount(){ var o=$('c_body_html'); if(o) o.textContent = ED().textContent.trim().length + ''; }
+
+  // Whitelist sanitiser. Google Docs marks italic and bold with span STYLES,
+  // not <em>/<strong>, so those are converted before anything is stripped.
+  var OK = {P:1,BR:1,STRONG:1,EM:1,U:1,UL:1,OL:1,LI:1,A:1,BLOCKQUOTE:1};
+  function clean(html){
+    var wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('script,style,meta,link,iframe,object,embed,img').forEach(function(n){ n.remove(); });
+    Array.prototype.slice.call(wrap.querySelectorAll('*')).forEach(function(n){
+      var st = (n.getAttribute && n.getAttribute('style')) || '';
+      var it = /font-style\s*:\s*italic/i.test(st);
+      var bd = /font-weight\s*:\s*(bold|[6-9]00)/i.test(st);
+      if(it || bd){
+        var inner = n.innerHTML;
+        if(it) inner = '<em>' + inner + '</em>';
+        if(bd) inner = '<strong>' + inner + '</strong>';
+        var h = document.createElement('span'); h.innerHTML = inner;
+        n.replaceWith.apply(n, Array.prototype.slice.call(h.childNodes));
+      }
+    });
+    wrap.querySelectorAll('b').forEach(function(n){ var s=document.createElement('strong'); s.innerHTML=n.innerHTML; n.replaceWith(s); });
+    wrap.querySelectorAll('i').forEach(function(n){ var s=document.createElement('em'); s.innerHTML=n.innerHTML; n.replaceWith(s); });
+    wrap.querySelectorAll('div').forEach(function(n){ var s=document.createElement('p'); s.innerHTML=n.innerHTML; n.replaceWith(s); });
+    Array.prototype.slice.call(wrap.querySelectorAll('*')).forEach(function(n){
+      if(!OK[n.tagName]){ n.replaceWith.apply(n, Array.prototype.slice.call(n.childNodes)); return; }
+      var href = n.tagName === 'A' ? n.getAttribute('href') : null;
+      Array.prototype.slice.call(n.attributes).forEach(function(a){ n.removeAttribute(a.name); });
+      if(n.tagName === 'A'){
+        if(href && /^https?:\/\//i.test(href)) n.setAttribute('href', href);
+        else n.replaceWith.apply(n, Array.prototype.slice.call(n.childNodes));
+      }
+    });
+    return wrap.innerHTML.replace(/<p>\s*<\/p>/g,'');
+  }
+
+  ED().addEventListener('paste', function(e){
+    e.preventDefault();
+    var d = e.clipboardData, html = d.getData('text/html');
+    var out = html ? clean(html)
+      : (d.getData('text/plain')||'').split(/\n{2,}/).map(function(p){
+          return '<p>' + p.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</p>'; }).join('');
+    document.execCommand('insertHTML', false, out);
+    bodyCount(); queueSave();
+  });
+  ED().addEventListener('input', function(){ bodyCount(); queueSave(); });
+  document.querySelectorAll('.tb button').forEach(function(b){
+    b.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    b.addEventListener('click', function(){
+      var c = b.getAttribute('data-cmd');
+      ED().focus();
+      if(c === 'createLink'){
+        var u = prompt('Link URL (https://...)');
+        if(!u || !/^https?:\/\//i.test(u)) return;
+        document.execCommand('createLink', false, u);
+      } else { document.execCommand(c, false, null); }
+      bodyCount(); queueSave();
+    });
+  });
 
   TEXT.forEach(function(k){
     var el = $(k);
