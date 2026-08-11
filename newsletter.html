@@ -3,7 +3,7 @@
 ============================================================
   TFS COMMAND CENTER | Newsletter (write the issue here)
   rbiehn.github.io/tfs-command-center/newsletter.html
-  Version 2.0 | August 10, 2026
+  Version 2.1 | August 10, 2026
   ========================================================
   WHY THIS EXISTS: on 2026-08-07 the 1:15 PM stage run found no
   draft and no-opped, because Robert was writing in a Google Doc
@@ -378,7 +378,16 @@
         n.replaceWith.apply(n, Array.prototype.slice.call(h.childNodes));
       }
     });
-    wrap.querySelectorAll('b').forEach(function(n){ var s=document.createElement('strong'); s.innerHTML=n.innerHTML; n.replaceWith(s); });
+    // Google Docs wraps EVERY paste in <b style="font-weight:normal">. Unwrap those
+    // FIRST or the whole pasted issue comes out bold. Found in live testing 2026-08-10.
+    Array.prototype.slice.call(wrap.querySelectorAll('[style*="font-weight"]')).forEach(function(n){
+      if(/font-weight\s*:\s*normal/i.test(n.getAttribute('style')||''))
+        n.replaceWith.apply(n, Array.prototype.slice.call(n.childNodes));
+    });
+    wrap.querySelectorAll('b').forEach(function(n){
+      if(/font-weight\s*:\s*normal/i.test(n.getAttribute('style')||'')){
+        n.replaceWith.apply(n, Array.prototype.slice.call(n.childNodes)); return; }
+      var s=document.createElement('strong'); s.innerHTML=n.innerHTML; n.replaceWith(s); });
     wrap.querySelectorAll('i').forEach(function(n){ var s=document.createElement('em'); s.innerHTML=n.innerHTML; n.replaceWith(s); });
     wrap.querySelectorAll('div').forEach(function(n){ var s=document.createElement('p'); s.innerHTML=n.innerHTML; n.replaceWith(s); });
     Array.prototype.slice.call(wrap.querySelectorAll('*')).forEach(function(n){
