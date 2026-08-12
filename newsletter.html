@@ -3,7 +3,7 @@
 ============================================================
   TFS COMMAND CENTER | Newsletter (write the issue here)
   rbiehn.github.io/tfs-command-center/newsletter.html
-  Version 2.1 | August 10, 2026
+  Version 2.2 | August 10, 2026
   ========================================================
   WHY THIS EXISTS: on 2026-08-07 the 1:15 PM stage run found no
   draft and no-opped, because Robert was writing in a Google Doc
@@ -71,6 +71,12 @@
   .tb button{background:#1a1d27;border:1px solid #2c3142;color:#e8eaf0;border-radius:8px;
     min-width:44px;min-height:40px;font-size:14px;cursor:pointer}
   .tb button:active{transform:translateY(1px)}
+  .hist{margin:10px 0 0;border-top:1px solid #2c3142;padding-top:10px}
+  .hist .rowi{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:8px 0;border-bottom:1px solid #22262f;font-size:13px;color:#9aa0b4}
+  .hist .rowi b{color:#e8eaf0;font-weight:600}
+  .hist button{background:#1a1d27;border:1px solid #c9a94a77;color:#c9a94a;
+    border-radius:8px;padding:6px 12px;min-height:36px;font-size:12px;cursor:pointer}
   .field{margin:0 0 14px}
   .count{float:right;font-size:11px;color:#9aa0b4;letter-spacing:.06em}
   .count.warn{color:#f97316}
@@ -225,9 +231,11 @@
     <div id="readonly"></div>
     <div class="row" style="margin-top:10px">
       <button class="btn gold" id="saveNow" style="flex:1 1 auto">Save now</button>
+      <button class="btn" id="histBtn" style="flex:0 0 auto">History</button>
       <button class="btn" id="reload" style="flex:0 0 auto">Reload</button>
     </div>
     <p class="hint" id="dateSwitch"></p>
+    <div class="hist hide" id="histBox"></div>
   </div>
 </div>
 
@@ -435,6 +443,62 @@
     $(k).addEventListener('input', queueSave);
     $(k).addEventListener('change', queueSave);
   });
+
+  // VERSION HISTORY. Every save snapshots the PREVIOUS text, throttled to one
+  // checkpoint per 2 minutes, so an accidental overwrite is recoverable.
+  // Restoring saves the old text FORWARD, which snapshots what is on screen
+  // first, so an undo can itself be undone. Nothing is ever deleted.
+  var histOpen = false;
+  function fmtWhen(iso){
+    var d = new Date(iso), now = new Date();
+    var mins = Math.round((now - d) / 60000);
+    if(mins < 1) return 'just now';
+    if(mins < 60) return mins + ' min ago';
+    if(d.toDateString() === now.toDateString()) return 'today ' + d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+    return d.toLocaleDateString([], {month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+  }
+  function renderHist(list){
+    var box = $('histBox');
+    if(!list.length){ box.innerHTML = '<p class="hint">No earlier versions yet. One is kept every couple of minutes as you write.</p>'; return; }
+    box.innerHTML = list.map(function(r){
+      return '<div class="rowi"><span><b>' + fmtWhen(r.created_at) + '</b> &middot; ' +
+             (r.char_count || 0) + ' chars' +
+             (r.subject ? ' &middot; ' + r.subject.replace(/</g,'&lt;').slice(0,40) : '') +
+             '</span><button data-rev="' + r.id + '">Restore</button></div>';
+    }).join('');
+    box.querySelectorAll('button[data-rev]').forEach(function(b){
+      b.addEventListener('click', function(){ restoreRev(b.getAttribute('data-rev')); });
+    });
+  }
+  function loadHist(){
+    setStatus('Loading history...', 'saving');
+    post(GET, {op:'revisions', issue_date: issueDate}).then(function(r){
+      if(!r.json || !r.json.ok){ setStatus('Could not load history.', 'err'); return; }
+      renderHist(r.json.revisions || []);
+      setStatus('History for ' + issueDate + '.', 'saved');
+    });
+  }
+  function restoreRev(id){
+    if(!confirm('Restore this version? What is on screen now is saved as a version first, so you can undo this.')) return;
+    setStatus('Restoring...', 'saving');
+    post(GET, {op:'revision', revision_id: Number(id)}).then(function(r){
+      if(!r.json || !r.json.ok){ setStatus('Could not restore.', 'err'); return; }
+      var v = r.json.revision;
+      if(v.subject != null) $('subject').value = v.subject;
+      if(v.preview_text != null) $('preview_text').value = v.preview_text;
+      if(v.body_html) ED().innerHTML = v.body_html;
+      else if(v.body_md) ED().innerHTML = v.body_md.split(/\n{2,}/).map(function(p){
+        return '<p>' + p.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</p>'; }).join('');
+      Object.keys(LIMITS).forEach(counter); bodyCount();
+      clearTimeout(timer); save();
+      setTimeout(loadHist, 1200);
+    });
+  }
+  $('histBtn').onclick = function(){
+    histOpen = !histOpen;
+    $('histBox').classList.toggle('hide', !histOpen);
+    if(histOpen) loadHist();
+  };
 
   $('saveNow').onclick = function(){ clearTimeout(timer); save(); };
   $('reload').onclick = function(){
